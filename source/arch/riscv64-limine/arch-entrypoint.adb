@@ -37,6 +37,10 @@ package body Arch.Entrypoint is
       --  Initialize architectural state first.
       Devices.UART.Init_UART0;
 
+      Lib.Messages.Put_Line ("Hello");
+
+      loop null; end loop;
+
       --  Translate the limine protocol into arch-agnostic structures.
       Limine.Translate_Proto;
 
