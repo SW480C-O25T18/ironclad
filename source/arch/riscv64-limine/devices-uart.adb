@@ -147,25 +147,3 @@ package body Devices.UART with SPARK_Mode => Off is
       end loop;
    end Write_UART0;
 end Devices.UART;
---  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-package body Devices.UART with SPARK_Mode => Off is
-   procedure Init_UART0 is
-   begin
-      null;
-   end Init_UART0;
-
-   procedure Write_UART0 (Message : Character) is
-      Data : Unsigned_8 with Import, Address => Message'Address;
-   begin
-      UART0_TX := Data;
-   end Write_UART0;
-
-   procedure Write_UART0 (Message : String) is
-   begin
-      for C of Message loop
-         Write_UART0 (C);
-      end loop;
-   end Write_UART0;
-end Devices.UART;
