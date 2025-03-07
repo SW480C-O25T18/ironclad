@@ -17,7 +17,7 @@
 package body Arch.Hooks is
    function Devices_Hook return Boolean is
    begin
-      return True;
+      return Devices.UART.Init_UART0;
    end Devices_Hook;
 
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
