@@ -40,6 +40,7 @@ package body Arch.Hooks is
    procedure Panic_SMP_Hook is
    begin
       null;
+      Lib.Messages.Put_Line ("Panic: System Halted");
    end Panic_SMP_Hook;
 
    function Get_Active_Core_Count return Positive is
