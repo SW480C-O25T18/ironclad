@@ -14,6 +14,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+with Interfaces; use Interfaces;
 with System;           -- For System.Address
 with Arch.Snippets;     -- For low-level interrupt enabling/disabling
 with Arch.PLIC;         -- For handling the interrupt controller
@@ -22,6 +23,19 @@ with Arch.Interrupts;   -- For the interrupt frame type
 
 package body Arch.Interrupts with SPARK_Mode => Off is
 
+procedure Handle_Interrupt (Frame_Ptr : in out Frame) is
+begin 
+   null;
+end Handle_Interrupt;
 
+procedure Save_FP_Context (Frame_Ptr : in out Frame) is
+begin 
+   null;
+end Save_FP_Context;
+
+procedure Restore_FP_Context (Frame_Ptr : in out Frame) is
+begin 
+   null;
+end Restore_FP_Context;
 
 end Arch.Interrupts;
