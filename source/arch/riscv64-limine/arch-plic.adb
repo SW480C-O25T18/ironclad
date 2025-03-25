@@ -150,5 +150,15 @@ package body Arch.PLIC is
       return PLIC_Config.Get_Priority_Offset;
    end Get_Priority_Offset;
 
+   function Get_Context_Base return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Context_Base;
+   end Get_Context_Base;
+
+   function Get_Context_Stride return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Context_Stride;
+   end Get_Context_Stride;
+
    
 end Arch.PLIC;
