@@ -35,23 +35,23 @@ package Arch.PLIC is
    -- Set dynamic configuration. All parameters (except those defined by the ISA)
    -- come from the DTB (or a higher-level configuration module). The parameter
    -- Enabled indicates if the PLIC is supported on this platform.
-   -- Defaults to PLIC = False which disables the PLIC unless the PLIC is enabled by
-   -- the DTB or higher-level configuration module.
    procedure Set_PLIC_Configuration (
      Base_Address         : System.Address := System'To_Address(16#0C000000#);
      Priority_Offset      : Unsigned_64   := 0;
      Context_Base_Offset  : Unsigned_64   := 16#200000#;
      Context_Stride       : Unsigned_64   := 16#1000#;
+     Threshold_Offset     : Unsigned_64   := 0;
      Max_Interrupt_ID     : Unsigned_64   := 1023;
      Max_Harts            : Unsigned_64   := 1;
      Contexts_Per_Hart    : Unsigned_64   := 1;
-     Enabled              : Boolean       := False
+     Enabled              : Boolean       := True
    );
 
    function Get_PLIC_Base return System.Address;
    function Get_Priority_Offset return Unsigned_64;
    function Get_Context_Base return Unsigned_64;
    function Get_Context_Stride return Unsigned_64;
+   function Get_Threshold_Offset return Unsigned_64;
    function Get_Max_Interrupt_ID return Unsigned_64;
    function Get_Max_Harts return Unsigned_64;
    function Get_Contexts_Per_Hart return Unsigned_64;

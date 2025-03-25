@@ -33,6 +33,7 @@ package body Arch.PLIC is
          Priority_Offset      : Unsigned_64;
          Context_Base_Offset  : Unsigned_64;
          Context_Stride       : Unsigned_64;
+         Threshold_Offset     : Unsigned_64;
          Max_Interrupt_ID     : Unsigned_64;
          Max_Harts            : Unsigned_64;
          Contexts_Per_Hart    : Unsigned_64;
@@ -42,6 +43,7 @@ package body Arch.PLIC is
       function Get_Priority_Offset return Unsigned_64;
       function Get_Context_Base return Unsigned_64;
       function Get_Context_Stride return Unsigned_64;
+      function Get_Threshold_Offset return Unsigned_64;
       function Get_Max_Interrupt_ID return Unsigned_64;
       function Get_Max_Harts return Unsigned_64;
       function Get_Contexts_Per_Hart return Unsigned_64;
@@ -51,6 +53,7 @@ package body Arch.PLIC is
       Priority_Offset : Unsigned_64 := 0;
       Context_Base : Unsigned_64 := 16#200000#;
       Context_Stride : Unsigned_64 := 16#1000#;
+      Threshold_Offset : Unsigned_64 := 0;
       Max_Interrupt_ID : Unsigned_64 := 1023;
       Max_Harts : Unsigned_64 := 1;
       Contexts_Per_Hart : Unsigned_64 := 1;
@@ -63,6 +66,7 @@ package body Arch.PLIC is
          Priority_Offset      : Unsigned_64;
          Context_Base_Offset  : Unsigned_64;
          Context_Stride       : Unsigned_64;
+         Threshold_Offset     : Unsigned_64;
          Max_Interrupt_ID     : Unsigned_64;
          Max_Harts            : Unsigned_64;
          Contexts_Per_Hart    : Unsigned_64;
@@ -73,6 +77,7 @@ package body Arch.PLIC is
          Priority_Offset := Priority_Offset;
          Context_Base := Context_Base_Offset;
          Context_Stride := Context_Stride;
+         Threshold_Offset : Threshold_Offset;
          Max_Interrupt_ID := Max_Interrupt_ID;
          Max_Harts := Max_Harts;
          Contexts_Per_Hart := Contexts_Per_Hart;
@@ -98,6 +103,11 @@ package body Arch.PLIC is
       begin
          return Context_Stride;
       end Get_Context_Stride;
+
+      function Get_Threshold_Offset return Unsigned_64 is
+      begin
+         return Threshold_Offset;
+      end Get_Threshold_Offset;
 
       function Get_Max_Interrupt_ID return Unsigned_64 is
       begin
@@ -128,6 +138,7 @@ package body Arch.PLIC is
       Priority_Offset      : Unsigned_64;
       Context_Base_Offset  : Unsigned_64;
       Context_Stride       : Unsigned_64;
+      Threshold_Offset     : Unsigned_64;
       Max_Interrupt_ID     : Unsigned_64;
       Max_Harts            : Unsigned_64;
       Contexts_Per_Hart    : Unsigned_64;
@@ -135,7 +146,7 @@ package body Arch.PLIC is
    ) is
    begin
       PLIC_Config.Set(Base_Address, Priority_Offset,
-                      Context_Base_Offset, Context_Stride,
+                      Context_Base_Offset, Context_Stride, Threshold_Offset,
                       Max_Interrupt_ID, Max_Harts, Contexts_Per_Hart,
                       Enabled);
    end Set_PLIC_Configuration;
@@ -163,6 +174,12 @@ package body Arch.PLIC is
       Arch.Debug.Print("Get_Context_Stride: " & Unsigned_64'Image(PLIC_Config.Get_Context_Stride));
       return PLIC_Config.Get_Context_Stride;
    end Get_Context_Stride;
+
+   function Get_Threshold_Offset return Unsigned_64 is
+   begin
+      Arch.Debug.Print("Get_Threshold_Offset: " & Unsigned_64'Image(PLIC_Config.Get_Threshold_Offset));
+      return PLIC_Config.Get_Threshold_Offset;
+   end Get_Threshold_Offset;
 
    function Get_Max_Interrupt_ID return Unsigned_64 is
    begin
@@ -296,7 +313,7 @@ package body Arch.PLIC is
          return 0;
       end if;
       Arch.Debug.Print("Claim: Start");
-      Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      Claim_Reg := Reg(PLIC_Address(Ctx_Base + Get_Threshold_Offset + 4));
       Arch.Debug.Print("Claim: Claim register address: " & Unsigned_64'Image(Claim_Reg'Address));
       pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
                "Claim register address out of bounds");
@@ -325,7 +342,7 @@ package body Arch.PLIC is
          return;
       end if;
       Arch.Debug.Print("Complete: Start");
-      Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      Claim_Reg := Reg(PLIC_Address(Ctx_Base + Get_Threshold_Offset + 4));
       Arch.Debug.Print("Complete: Claim register address: " & Unsigned_64'Image(Claim_Reg'Address));
       pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
                "Claim register address out of bounds");
@@ -339,4 +356,126 @@ package body Arch.PLIC is
    end Complete;
 
    ------------------------------------------------------------------------------
+   --  Acknowledge
+   --  Acknowledges the completion of an interrupt for a given Hart and Context.
+   ------------------------------------------------------------------------------
+   procedure Acknowledge (Hart_ID   : Unsigned_64;
+                          Context_ID: Unsigned_64 := 0) is
+      Int_ID : Unsigned_64;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Acknowledge: PLIC is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print("Acknowledge: Start");
+      Int_ID := Claim(Hart_ID, Context_ID);
+      Arch.Debug.Print("Acknowledge: Acknowledging interrupt ID: " & Unsigned_64'Image(Int_ID));
+      -- Acknowledge the completion of the interrupt by writing the claimed ID back to the register
+      if Int_ID /= 0 then
+         Complete(Hart_ID, Context_ID, Int_ID);
+      end if;
+      Arch.Debug.Print("Acknowledge: End");
+   end Acknowledge;
+
+   ------------------------------------------------------------------------------
+   --  Set_Interrupt_Priority
+   --  Each interrupt source has an associated priority stored at:
+   --      (PLIC base + Priority_Offset) + (Interrupt_ID * 4)
+   --  The register is 32 bits wide.
+   ------------------------------------------------------------------------------
+   procedure Set_Interrupt_Priority (Interrupt_ID : Unsigned_64;
+                                     Priority     : Unsigned_64) is
+      Reg_Addr : constant System.Address;
+      Priority_Reg : Reg_Ptr;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Set_Interrupt_Priority: PLIC is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print("Set_Interrupt_Priority: Start");
+      pragma Assert (Interrupt_ID <= Get_Max_Interrupt_ID, "Interrupt_ID out of range");
+      -- Calculate the address of the priority register for the interrupt source
+      Arch.Debug.Print("Set_Interrupt_Priority: Calculating priority register address");
+      Reg_Addr := PLIC_Address(Get_Priority_Offset + (Interrupt_ID * 4));
+      Arch.Debug.Print("Set_Interrupt_Priority: Priority register address: " & Unsigned_64'Image(To_Integer(Reg_Addr)));
+      -- Access the priority register using a volatile pointer
+      Arch.Debug.Print("Set_Interrupt_Priority: Accessing priority register");
+      Priority_Reg := Reg(Reg_Addr);
+      Arch.Debug.Print("Set_Interrupt_Priority: Priority register address: " & Unsigned_64'Image(Priority_Reg'Address));
+      -- Set the priority of the interrupt source
+      Arch.Debug.Print("Set_Interrupt_Priority: Writing priority to register");
+      Priority_Reg.all := Priority;
+      Arch.Debug.Print("Set_Interrupt_Priority: Writing priority End");
+      -- Memory barrier to ensure ordering of memory operations
+      Memory_Barrier;
+      Arch.Debug.Print("Set_Interrupt_Priority: End");
+   end Set_Interrupt_Priority;
+
+   ------------------------------------------------------------------------------
+   --  Get_Interrupt_Priority
+   --  Returns the priority of the specified interrupt source.
+   ------------------------------------------------------------------------------
+   function Get_Interrupt_Priority (Interrupt_ID : Unsigned_64) return Unsigned_64 is
+      Reg_Addr : constant System.Address;
+      Priority_Reg : Reg_Ptr;
+      Priority : Unsigned_64;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Get_Interrupt_Priority: PLIC is disabled.");
+         return 0;
+      end if;
+      Arch.Debug.Print("Get_Interrupt_Priority: Start");
+      pragma Assert (Interrupt_ID <= Get_Max_Interrupt_ID, "Interrupt_ID out of range");
+      -- Calculate the address of the priority register for the interrupt source
+      Arch.Debug.Print("Get_Interrupt_Priority: Calculating priority register address");
+      Reg_Addr := PLIC_Address(Get_Priority_Offset + (Interrupt_ID * 4));
+      Arch.Debug.Print("Get_Interrupt_Priority: Priority register address: " & Unsigned_64'Image(To_Integer(Reg_Addr)));
+      -- Access the priority register using a volatile pointer
+      Arch.Debug.Print("Get_Interrupt_Priority: Accessing priority register");
+      Priority_Reg := Reg(Reg_Addr);
+      Arch.Debug.Print("Get_Interrupt_Priority: Priority register address: " & Unsigned_64'Image(Priority_Reg'Address));
+      -- Get the priority of the interrupt source
+      Arch.Debug.Print("Get_Interrupt_Priority: Reading priority from register");
+      Priority := Priority_Reg.all;
+      Arch.Debug.Print("Get_Interrupt_Priority: Priority: " & Unsigned_64'Image(Priority));
+      Arch.Debug.Print("Get_Interrupt_Priority: End");
+      return Priority;
+   end Get_Interrupt_Priority;
+
+   ------------------------------------------------------------------------------
+   --  Threshold Management
+   --  The threshold register for a given Hart and Context is located at the start
+   --  of the context region.
+   ------------------------------------------------------------------------------
+   ------------------------------------------------------------------------------
+   --  Set_Threshold
+   --  Each Hart has a threshold register that determines the minimum priority
+   --  level of interrupts that can be claimed.
+   --  The threshold register is located at:
+   --      (PLIC base + Context_Offset) + 0x2000
+   --  The register is 32 bits wide.
+   ------------------------------------------------------------------------------
+   procedure Set_Threshold (Hart_ID   : Unsigned_64;
+                           Context_ID: Unsigned_64;
+                           Threshold : Unsigned_64) is
+      Ctx_Base : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
+      Threshold_Reg : Reg_Ptr;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Set_Threshold: PLIC is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print("Set_Threshold: Start");
+      Threshold_Reg := Reg(PLIC_Address(Ctx_Base + Get_Threshold_Offset));
+      Arch.Debug.Print("Set_Threshold: Threshold register address: " & Unsigned_64'Image(Threshold_Reg'Address));
+      pragma Assert (Ctx_Base + Get_Threshold_Offset < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
+               "Threshold register address out of bounds");
+      -- Set the threshold for the Hart
+      Arch.Debug.Print("Set_Threshold: Writing threshold to register");
+      Threshold_Reg.all := Threshold;
+      Arch.Debug.Print("Set_Threshold: Writing threshold End");
+      -- Memory barrier to ensure ordering of memory operations
+      Memory_Barrier;
+      Arch.Debug.Print("Set_Threshold: End");
+   end Set_Threshold;
 end Arch.PLIC;
