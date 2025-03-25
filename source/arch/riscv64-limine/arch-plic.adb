@@ -180,5 +180,15 @@ package body Arch.PLIC is
       return PLIC_Config.Get_Enabled;
    end Is_Enabled;
 
-   
+   ------------------------------------------------------------------------------
+   --  Helper Function: PLIC_Address
+   --
+   --  Computes an absolute address by adding an offset to the configured PLIC base.
+   ------------------------------------------------------------------------------
+   function PLIC_Address (Offset : Unsigned_64) return System.Address is
+      use System.Storage_Elements;
+      Base_Int : constant Integer := To_Integer(To_Address(Get_PLIC_Base));
+   begin
+      return To_Address(Base_Int + To_Integer(Offset));
+   end PLIC_Address;
 end Arch.PLIC;
