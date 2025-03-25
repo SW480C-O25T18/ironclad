@@ -226,4 +226,18 @@ package body Arch.PLIC is
          Size             => 0
       );
    end Memory_Barrier;
+
+   ------------------------------------------------------------------------------
+   -- Check if PLIC is enabled. If not, print a debug message and return False.
+   ------------------------------------------------------------------------------
+   procedure Check_PLIC_Supported return Boolean is
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("PLIC not supported on this platform.");
+         return False;
+      else
+         Arch.Debug.Print("PLIC is supported on this platform.");
+         return True;
+      end if;
+   end Check_PLIC_Supported;
 end Arch.PLIC;
