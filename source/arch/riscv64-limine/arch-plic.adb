@@ -213,5 +213,17 @@ package body Arch.PLIC is
       return Reg_Ptr(Abs_Addr);
    end Reg;
 
-   
+   ------------------------------------------------------------------------------
+   --  Memory_Barrier
+   --  Issues a RISC-V fence instruction to enforce ordering of memory operations.
+   ------------------------------------------------------------------------------
+   procedure Memory_Barrier is
+   begin
+      System.Machine_Code.Atomic_Load_Store(
+         Atomic_Operation => System.Machine_Code.Fence,
+         Address          => System.Null_Address,
+         Value            => 0,
+         Size             => 0
+      );
+   end Memory_Barrier;
 end Arch.PLIC;
