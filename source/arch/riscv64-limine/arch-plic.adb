@@ -120,7 +120,25 @@ package body Arch.PLIC is
       end Get_Enabled;
    end PLIC_Config;
 
-   
+   ------------------------------------------------------------------------------
+   --  DTB Configuration Setters/Getters
+   ------------------------------------------------------------------------------
+   procedure Set_PLIC_Configuration (
+      Base_Address         : System.Address;
+      Priority_Offset      : Unsigned_64;
+      Context_Base_Offset  : Unsigned_64;
+      Context_Stride       : Unsigned_64;
+      Max_Interrupt_ID     : Unsigned_64;
+      Max_Harts            : Unsigned_64;
+      Contexts_Per_Hart    : Unsigned_64;
+      Enabled              : Boolean := True
+   ) is
+   begin
+      PLIC_Config.Set(Base_Address, Priority_Offset,
+                      Context_Base_Offset, Context_Stride,
+                      Max_Interrupt_ID, Max_Harts, Contexts_Per_Hart,
+                      Enabled);
+   end Set_PLIC_Configuration;
 
 
 end Arch.PLIC;
