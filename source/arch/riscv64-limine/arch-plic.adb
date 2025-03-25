@@ -169,4 +169,16 @@ package body Arch.PLIC is
    begin
       return PLIC_Config.Get_Max_Harts;
    end Get_Max_Harts;
+
+   function Get_Contexts_Per_Hart return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Contexts_Per_Hart;
+   end Get_Contexts_Per_Hart;
+
+   function Is_Enabled return Boolean is
+   begin
+      return PLIC_Config.Get_Enabled;
+   end Is_Enabled;
+
+   
 end Arch.PLIC;
