@@ -261,6 +261,54 @@ package body Arch.PLIC is
       Threshold_Reg.all := 0;
       -- Memory barrier to ensure ordering of memory operations
       Memory_Barrier;
+   end Initialize;
 
-      
+   ------------------------------------------------------------------------------
+   --  Claim
+   --  Claims the highest-priority pending interrupt for a given Hart and Context.
+   ------------------------------------------------------------------------------
+   function Claim (Hart_ID   : Unsigned_64;
+                   Context_ID: Unsigned_64 := 0) return Unsigned_64 is
+      Ctx_Base : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
+      Claim_Reg : Reg_Ptr;
+      Claimed_ID : Unsigned_64;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Claim: PLIC is disabled.");
+         return 0;
+      end if;
+      Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
+               "Claim register address out of bounds");
+      -- Claim the highest-priority pending interrupt
+      Claimed_ID := Claim_Reg.all;
+      -- Memory barrier to ensure ordering of memory operations
+      Memory_Barrier;
+      return Claimed_ID;
+   end Claim;
+
+   ------------------------------------------------------------------------------
+   --  Complete
+   --  Completes the interrupt handling for a given Hart and Context.
+   ------------------------------------------------------------------------------
+   procedure Complete (Hart_ID   : Unsigned_64;
+                       Context_ID: Unsigned_64 := 0;
+                       Interrupt_ID : Unsigned_64) is
+      Ctx_Base : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
+      Claim_Reg : Reg_Ptr;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Complete: PLIC is disabled.");
+         return;
+      end if;
+      Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
+               "Claim register address out of bounds");
+      -- Complete the interrupt handling by writing the claimed ID back to the register
+      Claim_Reg.all := Interrupt_ID;
+      -- Memory barrier to ensure ordering of memory operations
+      Memory_Barrier;
+   end Complete;
+
+   ------------------------------------------------------------------------------
 end Arch.PLIC;
