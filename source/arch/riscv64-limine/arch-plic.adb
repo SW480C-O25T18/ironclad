@@ -182,7 +182,6 @@ package body Arch.PLIC is
 
    ------------------------------------------------------------------------------
    --  Helper Function: PLIC_Address
-   --
    --  Computes an absolute address by adding an offset to the configured PLIC base.
    ------------------------------------------------------------------------------
    function PLIC_Address (Offset : Unsigned_64) return System.Address is
@@ -191,4 +190,19 @@ package body Arch.PLIC is
    begin
       return To_Address(Base_Int + To_Integer(Offset));
    end PLIC_Address;
+
+   ------------------------------------------------------------------------------
+   --  Helper Function: Context_Offset
+   --  Computes the offset for a given Hart and Context using dynamic configuration.
+   ------------------------------------------------------------------------------
+   function Context_Offset (Hart_ID : Unsigned_64; Context_ID : Unsigned_64) return Unsigned_64 is
+   begin
+      return Get_Context_Base + (Hart_ID * Get_Context_Stride) + (Context_ID * Get_Context_Stride);
+   end Context_Offset;
+
+   ------------------------------------------------------------------------------
+   --  Volatile Register Pointer Type
+   --  Used for memory-mapped register accesses.
+   ------------------------------------------------------------------------------
+   
 end Arch.PLIC;
