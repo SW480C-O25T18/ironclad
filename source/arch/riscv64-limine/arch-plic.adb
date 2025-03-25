@@ -17,9 +17,9 @@
 with System;
 with System.Storage_Elements;
 with Interfaces; use Interfaces;
-with Ada.Assertions;         -- For pragma Assert
-with System.Machine_Code;    -- For inline assembly
-with Arch.Debug;             -- For Arch.Debug.Print messages        
+with Ada.Assertions;         -- For contract checking
+with System.Machine_Code;    -- For inline assembly fence
+with Arch.Debug;             -- For debug printing       
 
 package body Arch.PLIC is
    ------------------------------------------------------------------------------
