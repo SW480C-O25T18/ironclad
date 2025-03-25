@@ -77,8 +77,11 @@ package body Arch.CPU with SPARK_Mode => Off is
             end loop;
          end;
       end if;
-      for I in Core_Locals (Core_Number)'Range loop
-         Debug.Print ("Init_Cores: Core_Locals (" & Core_Number'Image & ") (" & I'Image & ") = " & Core_Locals (Core_Number) (I)'Image);
+      for cpu in Core_Locals'Range loop
+         Debug.Print ("Init_Cores: Core_Locals (" & cpu'Image & ") = " & Core_Locals (cpu)'Image);
+         for I in Core_Locals (cpu)'Range loop
+            Debug.Print ("Init_Cores: Core_Locals (" & cpu'Image & ") (" & I'Image & ") = " & Core_Locals (cpu) (I)'Image);
+         end loop;
       end loop;
       Debug.Print ("All cores initialized");
    end Init_Cores;
