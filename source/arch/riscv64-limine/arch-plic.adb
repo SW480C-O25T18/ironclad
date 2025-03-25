@@ -240,4 +240,27 @@ package body Arch.PLIC is
          return True;
       end if;
    end Check_PLIC_Supported;
+
+   ------------------------------------------------------------------------------
+   --  Initialize
+   --  Initializes the PLIC for a given Hart and Context.
+   ------------------------------------------------------------------------------
+   procedure Initialize (Hart_ID   : Unsigned_64;
+                         Context_ID: Unsigned_64 := 0) is
+      Ctx_Base      : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
+      Threshold_Reg : Reg_Ptr;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Initialize: PLIC is disabled.");
+         return;
+      end if;
+      Threshold_Reg := Reg(PLIC_Address(Ctx_Base));
+      pragma Assert (Ctx_Base < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
+                       "Threshold register address out of bounds");
+      -- Initialize the threshold register to 0 (all interrupts enabled)
+      Threshold_Reg.all := 0;
+      -- Memory barrier to ensure ordering of memory operations
+      Memory_Barrier;
+
+      
 end Arch.PLIC;
