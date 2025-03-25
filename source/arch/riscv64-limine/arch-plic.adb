@@ -140,5 +140,15 @@ package body Arch.PLIC is
                       Enabled);
    end Set_PLIC_Configuration;
 
+   function Get_PLIC_Base return System.Address is
+   begin
+      return PLIC_Config.Get_Base;
+   end Get_PLIC_Base;
 
+   function Get_Priority_Offset return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Priority_Offset;
+   end Get_Priority_Offset;
+
+   
 end Arch.PLIC;
