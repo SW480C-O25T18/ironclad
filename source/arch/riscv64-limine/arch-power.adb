@@ -17,37 +17,87 @@
 
 with Arch.Snippets;
 with Lib.Panic;
+with SBI;  -- Include SBI interface for system reset
+with Ada.Text_IO;  -- For terminal output
 
 package body Arch.Power is
+
    procedure Halt (Status : out Power_Status) is
    begin
       --  Halt the system by entering an infinite loop.
       Lib.Panic.Hard_Panic ("System halted.");
+      Ada.Text_IO.Put_Line ("Halt procedure called: System is halting.");
+
+      -- Uncomment the following line to simulate a failure state for testing.
+      -- Status := Failure;
+      -- Ada.Text_IO.Put_Line ("Halt procedure: Simulated failure state.");
+      -- return;
+
       loop
          null;
       end loop;
 
       --  If somehow we exit the loop, set the status to failure.
       Status := Failure;
+      Ada.Text_IO.Put_Line ("Halt procedure: Exited loop unexpectedly. Status set to Failure.");
    end Halt;
 
    procedure Reboot (Status : out Power_Status) is
+      Result : Sbiret;
    begin
-      --  Attempt to reboot using a RISC-V-specific mechanism.
-      --  Write to the machine-mode reset CSR (Control and Status Register).
-      Snippets.CSR_Write (16#330#, 16#1#); -- Example: Writing to a reset CSR.
+      Ada.Text_IO.Put_Line ("Reboot procedure called: Attempting to reboot.");
 
-      --  If reboot fails, set the status to failure.
-      Status := Failure;
+      -- Uncomment the following line to simulate a failure state for testing.
+      -- Status := Failure;
+      -- Ada.Text_IO.Put_Line ("Reboot procedure: Simulated failure state.");
+      -- return;
+
+      --  Perform a cold reboot using SBI system reset.
+      Result := SBI.System_Reset (16#00000001#, 16#00000000#); -- Cold reboot, no reason
+
+      --  Check for errors in the SBI response
+      if Result.Error /= 0 then
+         Status := Failure;
+         Ada.Text_IO.Put_Line ("Reboot procedure: SBI call failed. Status set to Failure.");
+      else
+         -- Uncomment the following line to force a success state for testing.
+         -- Status := Success;
+         -- Ada.Text_IO.Put_Line ("Reboot procedure: Simulated success state.");
+         -- return;
+
+         -- This point should never be reached if reboot succeeds
+         Status := Success;
+         Ada.Text_IO.Put_Line ("Reboot procedure: SBI call succeeded. Status set to Success.");
+      end if;
    end Reboot;
 
    procedure Poweroff (Status : out Power_Status) is
+      Result : Sbiret;
    begin
-      --  Attempt to power off using a RISC-V-specific mechanism.
-      --  Write to a power-off CSR or use a specific memory-mapped I/O address.
-      Snippets.CSR_Write (16#331#, 16#0#); -- Example: Writing to a power-off CSR.
+      Ada.Text_IO.Put_Line ("Poweroff procedure called: Attempting to power off.");
 
-      --  If poweroff fails, set the status to failure.
-      Status := Failure;
+      -- Uncomment the following line to simulate a failure state for testing.
+      -- Status := Failure;
+      -- Ada.Text_IO.Put_Line ("Poweroff procedure: Simulated failure state.");
+      -- return;
+
+      --  Attempt to power off using SBI system reset.
+      Result := SBI.System_Reset (16#00000000#, 16#00000000#); -- Shutdown, no reason
+
+      --  Check for errors in the SBI response
+      if Result.Error /= 0 then
+         Status := Failure;
+         Ada.Text_IO.Put_Line ("Poweroff procedure: SBI call failed. Status set to Failure.");
+      else
+         -- Uncomment the following line to force a success state for testing.
+         -- Status := Success;
+         -- Ada.Text_IO.Put_Line ("Poweroff procedure: Simulated success state.");
+         -- return;
+
+         -- This point should never be reached if poweroff succeeds
+         Status := Success;
+         Ada.Text_IO.Put_Line ("Poweroff procedure: SBI call succeeded. Status set to Success.");
+      end if;
    end Poweroff;
+
 end Arch.Power;
