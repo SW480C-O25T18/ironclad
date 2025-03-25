@@ -142,41 +142,49 @@ package body Arch.PLIC is
 
    function Get_PLIC_Base return System.Address is
    begin
+      Arch.Debug.Print("Get_PLIC_Base: " & Unsigned_64'Image(PLIC_Config.Get_Base));
       return PLIC_Config.Get_Base;
    end Get_PLIC_Base;
 
    function Get_Priority_Offset return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Priority_Offset: " & Unsigned_64'Image(PLIC_Config.Get_Priority_Offset));
       return PLIC_Config.Get_Priority_Offset;
    end Get_Priority_Offset;
 
    function Get_Context_Base return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Context_Base: " & Unsigned_64'Image(PLIC_Config.Get_Context_Base));
       return PLIC_Config.Get_Context_Base;
    end Get_Context_Base;
 
    function Get_Context_Stride return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Context_Stride: " & Unsigned_64'Image(PLIC_Config.Get_Context_Stride));
       return PLIC_Config.Get_Context_Stride;
    end Get_Context_Stride;
 
    function Get_Max_Interrupt_ID return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Max_Interrupt_ID: " & Unsigned_64'Image(PLIC_Config.Get_Max_Interrupt_ID));
       return PLIC_Config.Get_Max_Interrupt_ID;
    end Get_Max_Interrupt_ID;
 
    function Get_Max_Harts return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Max_Harts: " & Unsigned_64'Image(PLIC_Config.Get_Max_Harts));
       return PLIC_Config.Get_Max_Harts;
    end Get_Max_Harts;
 
    function Get_Contexts_Per_Hart return Unsigned_64 is
    begin
+      Arch.Debug.Print("Get_Contexts_Per_Hart: " & Unsigned_64'Image(PLIC_Config.Get_Contexts_Per_Hart));
       return PLIC_Config.Get_Contexts_Per_Hart;
    end Get_Contexts_Per_Hart;
 
    function Is_Enabled return Boolean is
    begin
+      Arch.Debug.Print("Is_Enabled: " & Boolean'Image(PLIC_Config.Get_Enabled));
       return PLIC_Config.Get_Enabled;
    end Is_Enabled;
 
@@ -188,6 +196,7 @@ package body Arch.PLIC is
       use System.Storage_Elements;
       Base_Int : constant Integer := To_Integer(To_Address(Get_PLIC_Base));
    begin
+      Arch.Debug.Print("PLIC_Address: Base: " & Unsigned_64'Image(To_Integer(Get_PLIC_Base)));
       return To_Address(Base_Int + To_Integer(Offset));
    end PLIC_Address;
 
@@ -210,7 +219,9 @@ package body Arch.PLIC is
    type Reg_Ptr is access all Reg_Type;
    function Reg (Abs_Addr : System.Address) return Reg_Ptr is
    begin
+      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
       return Reg_Ptr(Abs_Addr);
+      Arch.Debug.Print("Reg: Address End");
    end Reg;
 
    ------------------------------------------------------------------------------
