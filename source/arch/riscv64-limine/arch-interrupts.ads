@@ -1,5 +1,17 @@
 --  arch-exceptions.ads: Specification of interrupt utilities.
 --  Copyright (C) 2021 streaksu
+--  Updated the Interrupts package specification to match the riscv64 ISA.
+--  This package provides the Frame type, which represents the complete CPU 
+--  state saved by the low-level trap entry code when an interrupt or exception occurs. 
+--  It captures all general-purpose registers (excluding x0, which is always zero) along 
+--  with the key control/status registers. The package also provides the Handle_Interrupt procedure, 
+--  which is invoked by the low-level trap entry (in assembly). It receives a pointer to a 
+--  Frame that holds the saved CPU state. The handler can then examine the state to dispatch system calls, 
+--  handle exceptions, or perform context switching. The package also provides Save_FP_Context 
+--  and Restore_FP_Context procedures, which are invoked only when the current task has used FP instructions. 
+--  They call into Arch.Context to save or restore the FP state (f0–f31), and update the 
+--  FP_Context_Ptr field in the Frame accordingly.
+--  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
