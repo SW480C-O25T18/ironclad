@@ -14,3 +14,39 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.
 
+with System;
+with Interfaces; use Interfaces;
+
+package Arch.CLINT is
+   ------------------------------------------------------------------------------
+   --  Arch.CLINT
+   --
+   --  This package encapsulates the Core Local Interruptor (CLINT) for RISCV64.
+   --  It supports dynamic configuration based on DTB (or other boot configuration)
+   --  parameters. All configuration parameters not dictated by the RISCV64 ISA are
+   --  set via Set_CLINT_Configuration. Default values are provided to allow basic
+   --  functionality even if DTB parsing is incomplete.
+   --
+   --  The CLINT manages:
+   --    - Software interrupts (msip registers) for each hart:
+   --         Address = CLINT_Base + MSIP_Offset + (Hart_ID * 4)
+   --
+   --    - Timer registers:
+   --         mtime (global, 64-bit) at CLINT_Base + MTime_Offset
+   --         mtimecmp (per hart, 64-bit) at
+   --             CLINT_Base + MTimecmp_Offset + (Hart_ID * 8)
+   --
+   --  A Boolean flag (Enabled) indicates whether the CLINT is supported. When
+   --  disabled, all functions report the lack of support and return safe defaults.
+   ------------------------------------------------------------------------------
+   type CLINT_Registers is record
+      MSIP : Unsigned_32;
+      Reserved1 : Unsigned_32;
+      MTIMECMP : Unsigned_64;
+      MTIMECMP_H : Unsigned_32;
+      Reserved2 : Unsigned_32;
+      MTIME : Unsigned_64;
+      MTIME_H : Unsigned_32;
+      Reserved3 : Unsigned_32;
+   end record;
+   
