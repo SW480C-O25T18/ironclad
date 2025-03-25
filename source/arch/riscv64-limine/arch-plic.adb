@@ -324,13 +324,18 @@ package body Arch.PLIC is
          Arch.Debug.Print("Complete: PLIC is disabled.");
          return;
       end if;
+      Arch.Debug.Print("Complete: Start");
       Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      Arch.Debug.Print("Complete: Claim register address: " & Unsigned_64'Image(Claim_Reg'Address));
       pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
                "Claim register address out of bounds");
       -- Complete the interrupt handling by writing the claimed ID back to the register
+      Arch.Debug.Print("Complete: Writing claimed ID back to claim register");
       Claim_Reg.all := Interrupt_ID;
+      Arch.Debug.Print("Complete: Writing claimed ID End");
       -- Memory barrier to ensure ordering of memory operations
       Memory_Barrier;
+      Arch.Debug.Print("Complete: End");
    end Complete;
 
    ------------------------------------------------------------------------------
