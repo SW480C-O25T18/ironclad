@@ -160,5 +160,13 @@ package body Arch.PLIC is
       return PLIC_Config.Get_Context_Stride;
    end Get_Context_Stride;
 
-   
+   function Get_Max_Interrupt_ID return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Max_Interrupt_ID;
+   end Get_Max_Interrupt_ID;
+
+   function Get_Max_Harts return Unsigned_64 is
+   begin
+      return PLIC_Config.Get_Max_Harts;
+   end Get_Max_Harts;
 end Arch.PLIC;
