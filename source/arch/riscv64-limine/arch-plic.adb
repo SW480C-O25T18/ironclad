@@ -478,4 +478,63 @@ package body Arch.PLIC is
       Memory_Barrier;
       Arch.Debug.Print("Set_Threshold: End");
    end Set_Threshold;
+
+   ------------------------------------------------------------------------------
+   --  Get_Threshold
+   --  Returns the threshold value for the specified Hart and Context.
+   ------------------------------------------------------------------------------
+   function Get_Threshold (Hart_ID   : Unsigned_64;
+                          Context_ID: Unsigned_64) return Unsigned_64 is
+      Ctx_Base : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
+      Threshold_Reg : Reg_Ptr;
+      Threshold : Unsigned_64;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Get_Threshold: PLIC is disabled.");
+         return 0;
+      end if;
+      Arch.Debug.Print("Get_Threshold: Start");
+      Threshold_Reg := Reg(PLIC_Address(Ctx_Base + Get_Threshold_Offset));
+      Arch.Debug.Print("Get_Threshold: Threshold register address: " & Unsigned_64'Image(Threshold_Reg'Address));
+      pragma Assert (Ctx_Base + Get_Threshold_Offset < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
+               "Threshold register address out of bounds");
+      -- Get the threshold for the Hart
+      Arch.Debug.Print("Get_Threshold: Reading threshold from register");
+      Threshold := Threshold_Reg.all;
+      Arch.Debug.Print("Get_Threshold: Threshold: " & Unsigned_64'Image(Threshold));
+      Arch.Debug.Print("Get_Threshold: End");
+      return Threshold;
+   end Get_Threshold;
+
+   ------------------------------------------------------------------------------
+   --  Reset_All
+   --  Resets all PLIC registers to their default values.
+   ------------------------------------------------------------------------------
+   procedure Reset_All is
+      Max_Harts         : constant Unsigned_64 := Get_Max_Harts;
+      Contexts_Per_Hart : constant Unsigned_64 := Get_Contexts_Per_Hart;
+      Max_Int           : constant Unsigned_64 := Get_Max_Interrupt_ID;
+      Interrupt_ID      : Unsigned_64;
+      Hart              : Unsigned_64;
+      Context           : Unsigned_64;
+   begin
+      if not Is_Enabled then
+         Arch.Debug.Print("Reset_All: PLIC is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print("Reset_All: Start");
+      -- Reset the threshold registers for all Harts and Contexts
+      Arch.Debug.Print("Reset_All: Resetting threshold registers");
+      for Hart in 0 .. Max_Harts - 1 loop
+         for Context in 0 .. Contexts_Per_Hart - 1 loop
+            Set_Threshold(Hart, Context, 0);
+         end loop;
+      end loop;
+      -- Reset the priority registers for all interrupt sources
+      Arch.Debug.Print("Reset_All: Resetting priority registers");
+      for Interrupt_ID in 0 .. Max_Int loop
+         Set_Interrupt_Priority(Interrupt_ID, 0);
+      end loop;
+      Arch.Debug.Print("Reset_All: End");
+   end Reset_All;
 end Arch.PLIC;
