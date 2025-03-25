@@ -204,5 +204,14 @@ package body Arch.PLIC is
    --  Volatile Register Pointer Type
    --  Used for memory-mapped register accesses.
    ------------------------------------------------------------------------------
+   type Reg_Type is new Unsigned_64;
+   pragma Volatile(Reg_Type);
+   -- Access type for volatile register pointers
+   type Reg_Ptr is access all Reg_Type;
+   function Reg (Abs_Addr : System.Address) return Reg_Ptr is
+   begin
+      return Reg_Ptr(Abs_Addr);
+   end Reg;
+
    
 end Arch.PLIC;
