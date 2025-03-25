@@ -219,12 +219,14 @@ package body Arch.PLIC is
    ------------------------------------------------------------------------------
    procedure Memory_Barrier is
    begin
+      Arch.Debug.Print("Memory barrier Start");
       System.Machine_Code.Atomic_Load_Store(
          Atomic_Operation => System.Machine_Code.Fence,
          Address          => System.Null_Address,
          Value            => 0,
          Size             => 0
       );
+      Arch.Debug.Print("Memory barrier End");
    end Memory_Barrier;
 
    ------------------------------------------------------------------------------
@@ -254,13 +256,18 @@ package body Arch.PLIC is
          Arch.Debug.Print("Initialize: PLIC is disabled.");
          return;
       end if;
+      Arch.Debug.Print("Initialize: Start");
       Threshold_Reg := Reg(PLIC_Address(Ctx_Base));
+      Arch.Debug.Print("Initialize: Threshold register address: " & Unsigned_64'Image(Threshold_Reg'Address));
       pragma Assert (Ctx_Base < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
                        "Threshold register address out of bounds");
       -- Initialize the threshold register to 0 (all interrupts enabled)
+      Arch.Debug.Print("Initialize: Writing 0 to threshold register");
       Threshold_Reg.all := 0;
+      Arch.Debug.Print("Initialize: Writing 0 End");
       -- Memory barrier to ensure ordering of memory operations
       Memory_Barrier;
+      Arch.Debug.Print("Initialize: End");
    end Initialize;
 
    ------------------------------------------------------------------------------
@@ -277,13 +284,18 @@ package body Arch.PLIC is
          Arch.Debug.Print("Claim: PLIC is disabled.");
          return 0;
       end if;
+      Arch.Debug.Print("Claim: Start");
       Claim_Reg := Reg(PLIC_Address(Ctx_Base + 4));
+      Arch.Debug.Print("Claim: Claim register address: " & Unsigned_64'Image(Claim_Reg'Address));
       pragma Assert (Ctx_Base + 4 < (Get_Context_Base + ((Hart_ID + 1) * Get_Context_Stride)),
                "Claim register address out of bounds");
       -- Claim the highest-priority pending interrupt
+      Arch.Debug.Print("Claim: Reading from claim register");
       Claimed_ID := Claim_Reg.all;
+      Arch.Debug.Print("Claim: Claimed ID: " & Unsigned_64'Image(Claimed_ID));
       -- Memory barrier to ensure ordering of memory operations
       Memory_Barrier;
+      Arch.Debug.Print("Claim: End");
       return Claimed_ID;
    end Claim;
 
