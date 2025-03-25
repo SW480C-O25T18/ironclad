@@ -57,5 +57,70 @@ package body Arch.PLIC is
       Enabled : Boolean := True;
    end PLIC_Config;
 
+   protected body PLIC_Config is
+      procedure Set (
+         Base_Address         : System.Address;
+         Priority_Offset      : Unsigned_64;
+         Context_Base_Offset  : Unsigned_64;
+         Context_Stride       : Unsigned_64;
+         Max_Interrupt_ID     : Unsigned_64;
+         Max_Harts            : Unsigned_64;
+         Contexts_Per_Hart    : Unsigned_64;
+         Enabled              : Boolean
+      ) is
+      begin
+         Base := Base_Address;
+         Priority_Offset := Priority_Offset;
+         Context_Base := Context_Base_Offset;
+         Context_Stride := Context_Stride;
+         Max_Interrupt_ID := Max_Interrupt_ID;
+         Max_Harts := Max_Harts;
+         Contexts_Per_Hart := Contexts_Per_Hart;
+         Self.Enabled := Enabled;
+      end Set;
+
+      function Get_Base return System.Address is
+      begin
+         return Base;
+      end Get_Base;
+
+      function Get_Priority_Offset return Unsigned_64 is
+      begin
+         return Priority_Offset;
+      end Get_Priority_Offset;
+
+      function Get_Context_Base return Unsigned_64 is
+      begin
+         return Context_Base;
+      end Get_Context_Base;
+
+      function Get_Context_Stride return Unsigned_64 is
+      begin
+         return Context_Stride;
+      end Get_Context_Stride;
+
+      function Get_Max_Interrupt_ID return Unsigned_64 is
+      begin
+         return Max_Interrupt_ID;
+      end Get_Max_Interrupt_ID;
+
+      function Get_Max_Harts return Unsigned_64 is
+      begin
+         return Max_Harts;
+      end Get_Max_Harts;
+
+      function Get_Contexts_Per_Hart return Unsigned_64 is
+      begin
+         return Contexts_Per_Hart;
+      end Get_Contexts_Per_Hart;
+
+      function Get_Enabled return Boolean is
+      begin
+         return Enabled;
+      end Get_Enabled;
+   end PLIC_Config;
+
+   
+
 
 end Arch.PLIC;
