@@ -15,8 +15,11 @@
 --  along with this program.  If not, see <http://www.gnu.
 
 with System;
+with System.Storage_Elements;
 with Interfaces; use Interfaces;
-with Arch.PLIC;         
+with Ada.Assertions;         -- For pragma Assert
+with System.Machine_Code;    -- For inline assembly
+with Arch.Debug;             -- For Arch.Debug.Print messages        
 
 package body Arch.PLIC is
 
