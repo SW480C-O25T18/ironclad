@@ -157,7 +157,7 @@ package body Arch.CLINT with SPARK_Mode => off is
    --  Used for memory-mapped register accesses.
    ------------------------------------------------------------------------------
    -- Volatile register type
-   type Reg_Type is new Unsigned_64 with Volatile;
+   type Reg_Type is new Unsigned_64;
    pragma Volatile (Reg_Type);
    -- Access type for volatile register pointers
    type Reg_Ptr is access all Reg_Type;
@@ -191,6 +191,32 @@ package body Arch.CLINT with SPARK_Mode => off is
    --  Each hart's msip register is located at:
    --      CLINT_Base + MSIP_Offset + (Hart_ID * 4)
    ------------------------------------------------------------------------------
+
+   -- Set Software Interrupt
+   procedure Set_Software_Interrupt (Hart_ID : Unsigned_64; Value : Boolean) is
+      type MSIP_Type is new Unsigned_32;
+      pragma Volatile(MSIP_Type);
+      type MSIP_Ptr is access all MSIP_Type;
+      Addr : constant System.Address :=
+         Get_CLINT_Base + To_Address(Get_MSIP_Offset + (Hart_ID * 4));
+      MSIP_Reg : MSIP_Ptr := MSIP_Ptr(Addr);
+   begin
+      Arch.Debug.Print ("Set_Software_Interrupt: Starting Set Software Interrupt");
+      Arch.Debug.Print ("Set_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Set_Software_Interrupt: CLINT is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print("Set_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
+      if Value then
+         Arch.Debug.Print("Set_Software_Interrupt: Setting Software Interrupt");
+         MSIP_Reg.all := 1;
+      else
+         Arch.Debug.Print("Set_Software_Interrupt: Clearing Software Interrupt");
+         MSIP_Reg.all := 0;
+      end if;
+      Arch.Debug.Print ("Set_Software_Interrupt: Ending Set Software Interrupt");   
+   end Set_Software_Interrupt;
 
 
 
