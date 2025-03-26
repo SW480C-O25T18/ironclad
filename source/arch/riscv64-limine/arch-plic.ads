@@ -17,7 +17,7 @@
 with System;
 with Interfaces; use Interfaces;
 
-package Arch.PLIC is
+package Arch.PLIC with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    --  Arch.PLIC
    --

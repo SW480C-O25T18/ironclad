@@ -17,7 +17,7 @@
 with System;
 with Interfaces; use Interfaces;
 
-package Arch.CLINT is
+package Arch.CLINT with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    --  Arch.CLINT
    --
@@ -110,6 +110,6 @@ package Arch.CLINT with SPARK_Mode => Off is
    --  Memory Barrier
    ------------------------------------------------------------------------------
    procedure Memory_Barrier with Inline;
-   
+
 end Arch.CLINT;
    
