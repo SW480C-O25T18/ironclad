@@ -15,6 +15,10 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 package body Arch.MMU is
+
+   Global_Kernel_Usage : Memory.Size := 0;
+   Global_Table_Usage  : Memory.Size := 0;
+
    function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
       pragma Unreferenced (Memmap);
    begin
@@ -137,7 +141,11 @@ package body Arch.MMU is
    end Get_User_Mapped_Size;
 
    procedure Get_Statistics (Stats : out Virtual_Statistics) is
+      Val1, Val2 : Memory.Size;
    begin
-      Stats := (others => 0);
+      Val1 := Global_Kernel_Usage;
+      Val2 := Global_Table_Usage;
+      Stats := (Val1, Val2, 0);
    end Get_Statistics;
+
 end Arch.MMU;
