@@ -169,9 +169,27 @@ package body Arch.CLINT with SPARK_Mode => off is
       return Reg_Ptr(Abs_Addr);
       Arch.Debug.Print("Reg: Address End");
    end Reg;
+
+   ------------------------------------------------------------------------------
+   --  Memory_Barrier
+   --  Issues a RISC-V fence instruction to enforce ordering of memory operations.
+   ------------------------------------------------------------------------------
+   procedure Memory_Barrier is
+   begin
+      Arch.Debug.Print("Memory barrier Start");
+      System.Machine_Code.Atomic_Load_Store(
+         Atomic_Operation => System.Machine_Code.Fence,
+         Address          => System.Null_Address,
+         Value            => 0,
+         Size             => 0
+      );
+      Arch.Debug.Print("Memory barrier End");
+   end Memory_Barrier;
    
    ------------------------------------------------------------------------------
-   --  Software Interrupt Management
+   --  Software Interrupt Management (msip registers)
+   --  Each hart's msip register is located at:
+   --      CLINT_Base + MSIP_Offset + (Hart_ID * 4)
    ------------------------------------------------------------------------------
 
 
