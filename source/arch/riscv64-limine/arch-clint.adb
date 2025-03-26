@@ -208,6 +208,7 @@ package body Arch.CLINT with SPARK_Mode => off is
          return;
       end if;
       Arch.Debug.Print("Set_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
+      Arch.Debug.Print ("Set_Software_Interrupt: Value: " & Boolean'Image(Value));
       if Value then
          Arch.Debug.Print("Set_Software_Interrupt: Setting Software Interrupt");
          MSIP_Reg.all := 1;
