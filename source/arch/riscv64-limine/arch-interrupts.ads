@@ -1,17 +1,6 @@
---  arch-exceptions.ads: Specification of interrupt utilities.
---  Copyright (C) 2021 streaksu
---  Updated the Interrupts package specification to match the riscv64 ISA.
---  This package provides the Frame type, which represents the complete CPU 
---  state saved by the low-level trap entry code when an interrupt or exception occurs. 
---  It captures all general-purpose registers (excluding x0, which is always zero) along 
---  with the key control/status registers. The package also provides the Handle_Interrupt procedure, 
---  which is invoked by the low-level trap entry (in assembly). It receives a pointer to a 
---  Frame that holds the saved CPU state. The handler can then examine the state to dispatch system calls, 
---  handle exceptions, or perform context switching. The package also provides Save_FP_Context 
---  and Restore_FP_Context procedures, which are invoked only when the current task has used FP instructions. 
---  They call into Arch.Context to save or restore the FP state (f0–f31), and update the 
---  FP_Context_Ptr field in the Frame accordingly.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  arch-interrupts.ads: Specification of interrupt utilities for RISC-V64 architecture.
+--  Provides support for dynamic IRQ registration, dispatching, and device IRQ handling.
+--  Copyright (C) 2025 Sean C. Weeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -28,68 +17,20 @@
 
 with Interfaces; use Interfaces;
 with System;           -- For System.Address
-with Arch.Snippets;     -- For low-level interrupt enabling/disabling
-with Arch.PLIC;         -- For handling the interrupt controller
-with Arch.Context;      -- For FP and general context management
+with Arch.DTB;         -- For DTB node access
 
 package Arch.Interrupts with SPARK_Mode => Off is
-   ------------------------------------------------------------------------------
-   --  Interrupt Frame for RISCV64
-   --
-   --  This type represents the complete CPU state saved by the low-level trap entry
-   --  code when an interrupt or exception occurs. It captures all general-purpose
-   --  registers (excluding x0, which is always zero) along with the key control/
-   --  status registers.
-   --
-   --  Register Organization:
-   --
-   --    Caller-Saved Registers (17 total):
-   --      x1  (ra)   : Return address
-   --      x4  (tp)   : Thread pointer (volatile)
-   --      x5  (t0)   : Temporary
-   --      x6  (t1)   : Temporary
-   --      x7  (t2)   : Temporary
-   --      x10 (a0)   : Function argument/return value
-   --      x11 (a1)   : Function argument/return value
-   --      x12 (a2)   : Function argument
-   --      x13 (a3)   : Function argument
-   --      x14 (a4)   : Function argument
-   --      x15 (a5)   : Function argument
-   --      x16 (a6)   : Function argument
-   --      x17 (a7)   : Function argument / syscall number
-   --      x28 (t3)   : Temporary
-   --      x29 (t4)   : Temporary
-   --      x30 (t5)   : Temporary
-   --      x31 (t6)   : Temporary
-   --
-   --    Callee-Saved Registers (14 total):
-   --      x2  (sp)   : Stack pointer
-   --      x3  (gp)   : Global pointer
-   --      x8  (s0/fp): Saved register / frame pointer
-   --      x9  (s1)   : Saved register
-   --      x18 (s2)   : Saved register
-   --      x19 (s3)   : Saved register
-   --      x20 (s4)   : Saved register
-   --      x21 (s5)   : Saved register
-   --      x22 (s6)   : Saved register
-   --      x23 (s7)   : Saved register
-   --      x24 (s8)   : Saved register
-   --      x25 (s9)   : Saved register
-   --      x26 (s10)  : Saved register
-   --      x27 (s11)  : Saved register
-   --
-   --    Control/Status Registers:
-   --      sepc    : Exception program counter (resume address)
-   --      scause  : Trap cause (provided by hardware)
-   --      stval   : Trap value (e.g., faulting address)
-   --      sstatus : Supervisor status register (includes the SPP bit)
-   --
-   --    Floating-Point Context Pointer:
-   --      FP_Context_Ptr : Points to a separately saved FP context (f0–f31).
-   --                       It is managed by Arch.Context. When a task first uses FP
-   --                       instructions, Arch.Context initializes the FP context and
-   --                       populates this pointer.
-   ------------------------------------------------------------------------------
+   ---------------------------------------------------------------------------
+   -- Types and Constants
+   ---------------------------------------------------------------------------
+
+   -- Type for IRQ handler procedures
+   type IRQ_Handler is access procedure;
+
+   -- Maximum number of IRQs supported
+   Max_IRQs : constant Integer := 255;
+
+   -- Frame type for interrupt handling (architecture-specific)
    type Frame is record
       -- Caller-Saved Registers:
       x1_ra   : Unsigned_64;  -- x1 (ra): Return address (caller-saved)
@@ -136,31 +77,38 @@ package Arch.Interrupts with SPARK_Mode => Off is
       FP_Context_Ptr : System.Address := System.Null_Address;
    end record with Pack;
 
-   ------------------------------------------------------------------------------
-   --  Constant Definitions
-   --
-   --  SSTATUS_SPP: Bit in sstatus that indicates the previous privilege level.
-   --             (SPP = 0 for user mode, SPP = 1 for kernel mode.)
-   ------------------------------------------------------------------------------
-   SSTATUS_SPP : constant Unsigned_64 := 2 ** 8;
+   ---------------------------------------------------------------------------
+   -- IRQ Registration and Dispatching
+   ---------------------------------------------------------------------------
 
-   ------------------------------------------------------------------------------
-   --  High-Level Trap/Interrupt Handling Routine
-   --
-   --  This procedure is invoked by the low-level trap entry (in assembly). It receives
-   --  a pointer to a Frame that holds the saved CPU state. The handler can then examine
-   --  the state to dispatch system calls, handle exceptions, or perform context switching.
-   ------------------------------------------------------------------------------
+   -- Register an IRQ handler for a specific IRQ number
+   -- Raises Constraint_Error if the IRQ number is invalid
+   procedure Register_IRQ (IRQ : Integer; Handler : IRQ_Handler);
+
+   -- Unregister an IRQ handler for a specific IRQ number
+   -- Raises Constraint_Error if the IRQ number is invalid
+   procedure Unregister_IRQ (IRQ : Integer);
+
+   -- Dispatch an interrupt to the appropriate handler
+   -- This is called by the interrupt controller when an IRQ occurs
    procedure Handle_Interrupt (Frame_Ptr : in out Frame);
 
-   ------------------------------------------------------------------------------
-   --  Floating-Point Context Management (Lazy Saving)
-   --
-   --  These routines are invoked only when the current task has used FP instructions.
-   --  They call into Arch.Context to save or restore the FP state (f0–f31), and update
-   --  the FP_Context_Ptr field in the Frame accordingly.
-   ------------------------------------------------------------------------------
-   procedure Save_FP_Context (Frame_Ptr : in out FP_Context);
-   procedure Restore_FP_Context (Frame_Ptr : in out FP_Context);
+   ---------------------------------------------------------------------------
+   -- Device IRQ Registration
+   ---------------------------------------------------------------------------
+
+   -- Register a device's IRQ handler based on its DTB node
+   -- Uses the "interrupts" property from the DTB node to determine the IRQ
+   procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node; Handler : IRQ_Handler);
+
+   ---------------------------------------------------------------------------
+   -- Floating-Point Context Management
+   ---------------------------------------------------------------------------
+
+   -- Save the floating-point context during an interrupt
+   procedure Save_FP_Context (Frame_Ptr : in out Frame);
+
+   -- Restore the floating-point context after an interrupt
+   procedure Restore_FP_Context (Frame_Ptr : in out Frame);
 
 end Arch.Interrupts;
