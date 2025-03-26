@@ -28,14 +28,23 @@ begin
    null;
 end Handle_Interrupt;
 
-procedure Save_FP_Context (Frame_Ptr : in out Frame) is
+procedure Save_FP_Context (Frame_Ptr : in out FP_Context) is
+   FP_State : Arch.Context.FP_Context := Frame_Ptr;
 begin 
-   null;
+   Arch.Debug.Print ("Save_FP_Context: Saving FP context");
+   Arch.Context.Save_FP_Context (FP_State.all);
+   Arch.Debug.Print ("Save_FP_Context: FP context saved");
 end Save_FP_Context;
 
-procedure Restore_FP_Context (Frame_Ptr : in out Frame) is
+procedure Restore_FP_Context (Frame_Ptr : in out FP_Context) is
+   FP_State : Arch.Context.FP_Context := Frame_Ptr;
 begin 
-   null;
+   Arch.Debug.Print ("Restore_FP_Context: Restoring FP context");
+   Arch.Context.Load_FP_Context (FP_State.all);
+   Arch.Debug.Print ("Restore_FP_Context: FP context restored");
+end Restore_FP_Context;
+
+end Arch.Interrupts;
 end Restore_FP_Context;
 
 end Arch.Interrupts;

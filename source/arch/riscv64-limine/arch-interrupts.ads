@@ -160,7 +160,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    --  They call into Arch.Context to save or restore the FP state (f0–f31), and update
    --  the FP_Context_Ptr field in the Frame accordingly.
    ------------------------------------------------------------------------------
-   procedure Save_FP_Context (Frame_Ptr : in out Frame);
-   procedure Restore_FP_Context (Frame_Ptr : in out Frame);
+   procedure Save_FP_Context (Frame_Ptr : in out FP_Context);
+   procedure Restore_FP_Context (Frame_Ptr : in out FP_Context);
 
 end Arch.Interrupts;
