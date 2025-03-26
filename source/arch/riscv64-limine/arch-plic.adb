@@ -452,7 +452,7 @@ package body Arch.PLIC is
    --  Each Hart has a threshold register that determines the minimum priority
    --  level of interrupts that can be claimed.
    --  The threshold register is located at:
-   --      (PLIC base + Context_Offset) + 0x2000
+   --      (PLIC base + Context_Base + (Hart_ID * Context_Stride)) + Threshold_Offset
    --  The register is 32 bits wide.
    ------------------------------------------------------------------------------
    procedure Set_Threshold (Hart_ID   : Unsigned_64;
