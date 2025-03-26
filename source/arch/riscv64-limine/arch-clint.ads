@@ -78,12 +78,38 @@ package Arch.CLINT with SPARK_Mode => Off is
       with Inline,
            Pre  => Hart_ID >= 0,
            Post => True;
+
    procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64)
       with Inline,
            Pre  => Hart_ID >= 0,
            Post => True;
+
    function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean
       with Inline,
            Pre  => Hart_ID >= 0,
            Post => True;
+
+   ------------------------------------------------------------------------------
+   --  Timer Management
+   ------------------------------------------------------------------------------
+   function Get_MTime return Unsigned_64
+      with Inline,
+           Post => True;
+
+   procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64)
+      with Inline,
+           Pre  => Hart_ID >= 0,
+           Post => Get_Timer_Compare(Hart_ID) = Time;
+
+   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64
+      with Inline,
+           Pre  => Hart_ID >= 0,
+           Post => True;
+
+   ------------------------------------------------------------------------------
+   --  Memory Barrier
+   ------------------------------------------------------------------------------
+   procedure Memory_Barrier with Inline;
+   
+end Arch.CLINT;
    
