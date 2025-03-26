@@ -39,18 +39,7 @@ package Arch.CLINT with SPARK_Mode => Off is
    --  A Boolean flag (Enabled) indicates whether the CLINT is supported. When
    --  disabled, all functions report the lack of support and return safe defaults.
    ------------------------------------------------------------------------------
-   with System;
-with Interfaces; use Interfaces;
 
-package Arch.CLINT with SPARK_Mode => Off is
-   ------------------------------------------------------------------------------
-   --  Arch.CLINT
-   --
-   --  This package encapsulates the Core Local Interruptor (CLINT) for RISCV64.
-   --  All configuration parameters (other than those defined by the RISCV64 ISA)
-   --  are set dynamically via Set_CLINT_Configuration. A Boolean flag (Enabled)
-   --  indicates whether the CLINT is supported on the platform.
-   ------------------------------------------------------------------------------
    procedure Set_CLINT_Configuration (
      Base_Address     : System.Address := System'To_Address(16#02000000#);
      MSIP_Offset      : Unsigned_64   := 0;
