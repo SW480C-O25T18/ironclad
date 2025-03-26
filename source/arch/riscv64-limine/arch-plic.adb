@@ -234,6 +234,8 @@ package body Arch.PLIC is
    pragma Volatile(Reg_Type);
    -- Access type for volatile register pointers
    type Reg_Ptr is access all Reg_Type;
+   
+   -- System address access conversion to volatile register pointer
    function Reg (Abs_Addr : System.Address) return Reg_Ptr is
    begin
       Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));

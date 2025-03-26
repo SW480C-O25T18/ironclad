@@ -154,11 +154,21 @@ package body Arch.CLINT with SPARK_Mode => off is
 
    ------------------------------------------------------------------------------
    --  Volatile Register Access: Define a volatile type.
+   --  Used for memory-mapped register accesses.
    ------------------------------------------------------------------------------
-
+   -- Volatile register type
    type Reg_Type is new Unsigned_64 with Volatile;
    pragma Volatile (Reg_Type);
-   
+   -- Access type for volatile register pointers
+   type Reg_Ptr is access all Reg_Type;
+
+   -- System address access conversion to volatile register pointer
+   function Reg (Abs_Addr : System.Address) return Reg_Ptr is
+   begin
+      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
+      return Reg_Ptr(Abs_Addr);
+      Arch.Debug.Print("Reg: Address End");
+   end Reg;
    
    ------------------------------------------------------------------------------
    --  Software Interrupt Management
