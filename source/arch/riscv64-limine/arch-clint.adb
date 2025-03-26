@@ -219,6 +219,61 @@ package body Arch.CLINT with SPARK_Mode => off is
       Arch.Debug.Print ("Set_Software_Interrupt: Ending Set Software Interrupt");   
    end Set_Software_Interrupt;
 
+   -- Clear Software Interrupt
+   procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64) is
+   begin
+      Arch.Debug.Print ("Clear_Software_Interrupt: Starting Clear Software Interrupt");
+      Arch.Debug.Print ("Clear_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
+      Arch.Debug.Print ("Clear_Software_Interrupt: Value: False");
+      Set_Software_Interrupt(Hart_ID, False);
+      Arch.Debug.Print ("Clear_Software_Interrupt: Ending Clear Software Interrupt");
+   end Clear_Software_Interrupt;
 
+   -- Read Software Interrupt
+   function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean is
+      type MSIP_Type is new Unsigned_32;
+      pragma Volatile(MSIP_Type);
+      type MSIP_Ptr is access all MSIP_Type;
+      Addr : constant System.Address :=
+         Get_CLINT_Base + To_Address(Get_MSIP_Offset + (Hart_ID * 4));
+      MSIP_Reg : MSIP_Ptr := MSIP_Ptr(Addr);
+   begin
+      Arch.Debug.Print ("Read_Software_Interrupt: Starting Read Software Interrupt");
+      Arch.Debug.Print ("Read_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
+      Arch.Debug.Print("Read_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
+      Arch.Debug.Print ("Read_Software_Interrupt: Ending Read Software Interrupt");
+      return MSIP_Reg.all /= 0;
+   end Read_Software_Interrupt;
+
+   ------------------------------------------------------------------------------
+   --  Timer Management
+   --  mtime (global, 64-bit) is located at:
+   --      CLINT_Base + MTime_Offset
+   --  mtimecmp (per hart, 64-bit) is located at:
+   --      CLINT_Base + MTimecmp_Offset + (Hart_ID * 8)
+   ------------------------------------------------------------------------------
+
+   -- Get MTime
+   function Get_MTime return Unsigned_64 is
+      type Timer_Type is new Unsigned_64;
+      pragma Volatile(Timer_Type);
+      type Timer_Ptr is access all Timer_Type;
+      Addr : constant System.Address := Get_CLINT_Base + To_Address(Get_MTime_Offset);
+      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   begin
+      Arch.Debug.Print ("Get_MTime: Starting Get MTime");
+      Arch.Debug.Print("Get_MTime: MTime Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
+      Arch.Debug.Print ("Get_MTime: Ending Get MTime");
+      return Timer_Reg.all;
+   end Get_MTime;
+
+   -- Set Timer Compare
+   procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64) is
+      type Timer_Type is new Unsigned_64;
+      pragma Volatile(Timer_Type);
+      type Timer_Ptr is access all Timer_Type;
+      Addr : constant System.Address :=
+         Get_CLINT_Base + To_Address(Get_MTimecmp_Offset + (Hart_ID * 8));
+      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
 
 end Arch.CLINT;
