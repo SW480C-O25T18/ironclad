@@ -216,6 +216,7 @@ package body Arch.CLINT with SPARK_Mode => off is
          Arch.Debug.Print("Set_Software_Interrupt: Clearing Software Interrupt");
          MSIP_Reg.all := 0;
       end if;
+      Memory_Barrier;
       Arch.Debug.Print ("Set_Software_Interrupt: Ending Set Software Interrupt");   
    end Set_Software_Interrupt;
 
@@ -223,6 +224,10 @@ package body Arch.CLINT with SPARK_Mode => off is
    procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64) is
    begin
       Arch.Debug.Print ("Clear_Software_Interrupt: Starting Clear Software Interrupt");
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Clear_Software_Interrupt: CLINT is disabled.");
+         return;
+      end if;
       Arch.Debug.Print ("Clear_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
       Arch.Debug.Print ("Clear_Software_Interrupt: Value: False");
       Set_Software_Interrupt(Hart_ID, False);
@@ -239,6 +244,10 @@ package body Arch.CLINT with SPARK_Mode => off is
       MSIP_Reg : MSIP_Ptr := MSIP_Ptr(Addr);
    begin
       Arch.Debug.Print ("Read_Software_Interrupt: Starting Read Software Interrupt");
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Read_Software_Interrupt: CLINT is disabled.");
+         return;
+      end if;
       Arch.Debug.Print ("Read_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
       Arch.Debug.Print("Read_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
       Arch.Debug.Print ("Read_Software_Interrupt: Ending Read Software Interrupt");
@@ -262,6 +271,10 @@ package body Arch.CLINT with SPARK_Mode => off is
       Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
    begin
       Arch.Debug.Print ("Get_MTime: Starting Get MTime");
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Get_MTime: CLINT is disabled.");
+         return;
+      end if;
       Arch.Debug.Print("Get_MTime: MTime Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
       Arch.Debug.Print ("Get_MTime: Ending Get MTime");
       return Timer_Reg.all;
@@ -275,5 +288,38 @@ package body Arch.CLINT with SPARK_Mode => off is
       Addr : constant System.Address :=
          Get_CLINT_Base + To_Address(Get_MTimecmp_Offset + (Hart_ID * 8));
       Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   begin
+      Arch.Debug.Print ("Set_Timer_Compare: Starting Set Timer Compare");
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Set_Timer_Compare: CLINT is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print ("Set_Timer_Compare: Hart ID: " & Unsigned_64'Image(Hart_ID));
+      Arch.Debug.Print ("Set_Timer_Compare: Time: " & Unsigned_64'Image(Time));
+      Arch.Debug.Print("Set_Timer_Compare: Timer Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
+      Timer_Reg.all := Time;
+      Memory_Barrier;
+      Arch.Debug.Print ("Set_Timer_Compare: Ending Set Timer Compare");
+   end Set_Timer_Compare;
+
+   -- Get Timer Compare
+   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64 is
+      type Timer_Type is new Unsigned_64;
+      pragma Volatile(Timer_Type);
+      type Timer_Ptr is access all Timer_Type;
+      Addr : constant System.Address :=
+         Get_CLINT_Base + To_Address(Get_MTimecmp_Offset + (Hart_ID * 8));
+      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   begin
+      Arch.Debug.Print ("Get_Timer_Compare: Starting Get Timer Compare");
+      if not CLINT_Enabled then
+         Arch.Debug.Print("Get_Timer_Compare: CLINT is disabled.");
+         return;
+      end if;
+      Arch.Debug.Print ("Get_Timer_Compare: Hart ID: " & Unsigned_64'Image(Hart_ID));
+      Arch.Debug.Print("Get_Timer_Compare: Timer Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
+      Arch.Debug.Print ("Get_Timer_Compare: Ending Get Timer Compare");
+      return Timer_Reg.all;
+   end Get_Timer_Compare;
 
 end Arch.CLINT;
