@@ -32,9 +32,96 @@ package body Arch.MMU is
    end Fork_Table;
 
    procedure Destroy_Table (Map : in out Page_Table_Acc) is
+      procedure Free_Page_Table is
+      new Ada.Unchecked_Deallocation(Page_Table, Page_Table_Acc);
+
+      type Mapping_Range_Acc is access all Mapping_Range;
+      procedure Free_Mapping_Range is
+      new Ada.Unchecked_Deallocation(Mapping_Range, Mapping_Range_Acc);
+
+      Curr_Range : Mapping_Range_Acc;
+      Last_Range : Mapping_Range_Acc;
+
+
+      function Is_Valid_Entry (P : Unsigned_64) return Boolean is
+
+      begin
+      return (P and 16#001#) /= 0;
+      end Is_Valid_Entry;
+
+      function Extract_Physical_Addr (P : Unsigned_64) return Interfaces.C.size_t is
+      PPN : Unsigned_64 := (P and 16#FFFFFFFFFFFFF000#);  -- need to check
+      begin
+      return Interfaces.C.size_t(PPN);
+      end Extract_Physical_Addr;
+
    begin
-      Map := null;
+
+   -- add lock here
+
+      if Map.Root = null then
+         -- Nothing to do if there's no root table
+         Free_Page_Table (Map);
+         return;
+      end if;
+
+      -- L3 is the top-level array pointed to by Map.Root
+      
+      for i in Index_Range loop
+         declare
+            L3_Entry : Unsigned_64 := Map.Root(i);
+         begin
+            if Is_Valid_Entry(L3_Entry) then
+               
+               L2_Phys := Extract_Physical_Addr(L3_Entry);
+
+               L2_Virt := To_Address(Memory_Offset + L2_Phys);
+               declare
+                  L2 : Page_Level
+                  with Import, Address => L2_Virt;
+
+               begin
+                  -- Walk all 512 entries in L2
+                  for j in Index_Range loop
+                     if Is_Valid_Entry(L2(j)) then
+                        L1_Phys := Extract_Physical_Addr(L2(j));
+                        L1_Virt := To_Address(Memory_Offset + L1_Phys);
+
+                        declare
+                           L1 : Page_Level
+                           with Import, Address => L1_Virt;
+                        begin
+                           -- Walk all 512 entries in L1
+                           for k in Index_Range loop
+                              if Is_Valid_Entry(L1(k)) then
+                                 -- L1(k) references an actual page frame
+                                 Frame_Phys := Extract_Physical_Addr(L1(k));
+                                 -- Free the final data page
+                                 Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
+                              end if;
+                           end loop;
+
+                           -- Free the entire L1 table page after clearing all entries
+                           Memory.Physical.Free(Interfaces.C.size_t(L1_Phys));
+                        end;
+                     end if;
+                  end loop;
+
+                  -- Now free the L2 table page
+                  Memory.Physical.Free(Interfaces.C.size_t(L2_Phys));
+               end;
+            end if;
+         end;
+      end loop;
+      
+      Free_Page_Table (Map);
+
+   exception
+      when Constraint_Error =>
+         --  In case of any pointer issues, just return quietly (or raise an error).
+         return;
    end Destroy_Table;
+
 
    function Make_Active (Map : Page_Table_Acc) return Boolean is
       pragma Unreferenced (Map);

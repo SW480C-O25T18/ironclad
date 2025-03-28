@@ -208,10 +208,18 @@ package Arch.MMU is
 
 private
 
-   #if ArchName = """riscv64-limine"""
-      type Page_Level is array (1 .. 512) of Unsigned_64 with Size => 512 * 64; --page table most likely using sv39 with 3-level
-      type Page_Level_Acc is access Page_Level;
-        type Mapping_Range is record
+   #if ArchName = "riscv64-limine"
+      subtype Index_Range is Integer range 0 .. 511;
+
+      type Page_Level is array (Index_Range) of Unsigned_64 with Size => 512 * 64; -- 512 entries × 64 bits = 4096 bytes
+
+      type Page_Level_Acc is access all Page_Level;
+
+      type Page_Table is record
+         Root : Page_Level_Acc;
+      end record;
+
+      type Mapping_Range is record
          Is_Valid       : Boolean;
          Virtual_Start  : System.Address;
          Physical_Start : System.Address;
@@ -219,23 +227,13 @@ private
          Flags          : Page_Permissions;
          Is_Dirty       : Boolean;
          Is_Accessed    : Boolean;
+         -- add Next here if using a linked list
       end record;
-      type Root_Page_Table is record
-         --satp register here
-         TTBR1 : Page_Level;
-      end record;
-      type Page_Table is record
-         TTBR : Page_Level;
-      end record;
-      type Internal_PTE_1 is record
-      end record;
-      type Internal_PTE_2 is record
-      end record;
-      type Leaf_PTE is record
-      end record;
-      type Page_Table_Data is record
 
-      end record;
+      type PTE is new Unsigned_64; -- can be used for internal or leaf nodes
+
+   #end if;
+
    #elsif ArchName = """x86_64-limine"""
       type PML4 is array (1 .. 512) of Unsigned_64 with Size => 512 * 64;
       type PML4_Acc is access PML4;
