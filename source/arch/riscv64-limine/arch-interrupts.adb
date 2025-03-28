@@ -36,6 +36,22 @@ package body Arch.Interrupts with SPARK_Mode => Off is
 
    IRQ_Counts : array (0 .. Max_IRQs) of Natural := (others => 0);
 
+   procedure Initialize is
+   begin
+      if not Arch.CLINT.Is_Enabled and then not Arch.PLIC.Is_Enabled then
+         Arch.Debug.Print("WARNING: No interrupt controller (PLIC or CLINT) detected. Entering fallback mode.");
+      elsif Arch.CLINT.Is_Enabled and then Arch.PLIC.Is_Enabled then
+         Arch.Debug.Print("NOTICE: Both CLINT and PLIC are enabled.");
+      else
+         if Arch.CLINT.Is_Enabled then
+            Arch.Debug.Print("CLINT is enabled.");
+         end if;
+         if Arch.PLIC.Is_Enabled then
+            Arch.Debug.Print("PLIC is enabled.");
+         end if;
+      end if;
+   end Initialize;
+
    function Extract_Priv_Level (SStatus : Unsigned_64) return String is
       SPP : constant Unsigned_64 := SStatus and SSTATUS_SPP;
    begin
