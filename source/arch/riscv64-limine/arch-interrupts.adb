@@ -26,6 +26,8 @@ with Arch.Debug;
 with Arch.Local;
 with Lib.Panic;
 with Scheduler;
+with Userland.Syscall;     use Userland.Syscall;
+
 
 package body Arch.Interrupts with SPARK_Mode => Off is
 
@@ -33,111 +35,122 @@ package body Arch.Interrupts with SPARK_Mode => Off is
 
    type IRQ_Table_Type is array (0 .. Max_IRQs) of IRQ_Handler;
    IRQ_Table : IRQ_Table_Type := (others => null);
-
    IRQ_Counts : array (0 .. Max_IRQs) of Natural := (others => 0);
 
    procedure Initialize is
    begin
-      if not Arch.CLINT.Is_Enabled and then not Arch.PLIC.Is_Enabled then
-         Arch.Debug.Print("WARNING: No interrupt controller (PLIC or CLINT) detected. Entering fallback mode.");
-      elsif Arch.CLINT.Is_Enabled and then Arch.PLIC.Is_Enabled then
-         Arch.Debug.Print("NOTICE: Both CLINT and PLIC are enabled.");
-      else
-         if Arch.CLINT.Is_Enabled then
-            Arch.Debug.Print("CLINT is enabled.");
-         end if;
-         if Arch.PLIC.Is_Enabled then
-            Arch.Debug.Print("PLIC is enabled.");
-         end if;
+      CLINT_Enabled := Arch.CLINT.CLINT_Enabled;
+      PLIC_Enabled  := Arch.PLIC.Is_Enabled;
+
+      if not CLINT_Enabled and not PLIC_Enabled then
+         Arch.Debug.Print("WARNING: No CLINT or PLIC present — fallback mode enabled.");
+      elsif CLINT_Enabled and PLIC_Enabled then
+         Arch.Debug.Print("CLINT and PLIC both enabled.");
+      elsif CLINT_Enabled then
+         Arch.Debug.Print("CLINT detected and enabled.");
+      elsif PLIC_Enabled then
+         Arch.Debug.Print("PLIC detected and enabled.");
       end if;
    end Initialize;
 
-   function Extract_Priv_Level (SStatus : Unsigned_64) return String is
-      SPP : constant Unsigned_64 := SStatus and SSTATUS_SPP;
-   begin
-      if (SStatus and 16#100#) /= 0 then return "Supervisor";
-      elsif (SStatus and 16#300#) = 0 then return "User";
-      else return "Machine";
-      end if;
-   end Extract_Priv_Level;
-
    procedure Register_IRQ (IRQ : Integer; Handler : IRQ_Handler) is
    begin
-      if IRQ < 0 or else IRQ > Max_IRQs then
-         raise Constraint_Error with "Invalid IRQ number";
+      if IRQ in IRQ_Table'Range then
+         IRQ_Table(IRQ) := Handler;
+         Arch.Debug.Print("IRQ " & Integer'Image(IRQ) & " registered.");
+      else
+         raise Constraint_Error with "Invalid IRQ index";
       end if;
-      IRQ_Table(IRQ) := Handler;
-      Arch.Debug.Print("Register_IRQ: IRQ" & Integer'Image(IRQ));
    end Register_IRQ;
 
    procedure Unregister_IRQ (IRQ : Integer) is
    begin
-      if IRQ < 0 or else IRQ > Max_IRQs then
-         raise Constraint_Error with "Invalid IRQ number";
+      if IRQ in IRQ_Table'Range then
+         IRQ_Table(IRQ) := null;
+         Arch.Debug.Print("IRQ " & Integer'Image(IRQ) & " unregistered.");
+      else
+         raise Constraint_Error with "Invalid IRQ index";
       end if;
-      IRQ_Table(IRQ) := null;
-      Arch.Debug.Print("Unregister_IRQ: IRQ" & Integer'Image(IRQ));
    end Unregister_IRQ;
 
    procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node; Handler : IRQ_Handler) is
-      IRQ : Integer := Arch.DTB.Get_IRQ(Node);
+      IRQ : constant Integer := Arch.DTB.Get_IRQ(Node);
    begin
       if IRQ /= -1 then
          Register_IRQ(IRQ, Handler);
-         Arch.Debug.Print("Register_Device_IRQ: IRQ" & Integer'Image(IRQ));
-      else
-         Arch.Debug.Print("Register_Device_IRQ: No IRQ for " & To_String(Node.Name));
+         Arch.Debug.Print("Device IRQ " & Integer'Image(IRQ) & " registered for " & To_String(Node.Name));
       end if;
    end Register_Device_IRQ;
 
    procedure Handle_Interrupt (Frame_Ptr : in out Frame) is
-      Priv      : constant String := Extract_Priv_Level(Frame_Ptr.sstatus);
-      Cause     : constant Unsigned_64 := Frame_Ptr.scause;
-      Hart_ID   : constant Unsigned_64 := 0;
-      Context_ID: constant Unsigned_64 := 0;
+      Cause : constant Unsigned_64 := Frame_Ptr.scause;
+      Hart  : constant Unsigned_64 := 0;
    begin
       case Cause is
-         when 5 => Scheduler_Handler (Frame_Ptr);
-         when 9 => Syscall_Handler (Frame_Ptr);
-         when 3 => Arch.CLINT.Clear_Software_Interrupt (Hart_ID); Scheduler_Handler (Frame_Ptr);
-         when 7 => Scheduler_Handler (Frame_Ptr);
-         when 11 =>
-            declare
-               IRQ : Integer := Integer(Arch.PLIC.Claim(Hart_ID, Context_ID));
-            begin
-               if IRQ >= 0 and then IRQ <= Max_IRQs then
-                  IRQ_Counts(IRQ) := IRQ_Counts(IRQ) + 1;
-                  Arch.Debug.Print("Dispatching IRQ " & Integer'Image(IRQ) & " Count=" & Natural'Image(IRQ_Counts(IRQ)));
-                  if IRQ_Table(IRQ) /= null then
-                     IRQ_Table(IRQ).all;
-                  else
-                     Arch.Debug.Print("No handler registered for IRQ " & Integer'Image(IRQ));
+         when 3 =>
+            if CLINT_Enabled then
+               Arch.CLINT.Clear_Software_Interrupt(Hart);
+               Scheduler.Scheduler_ISR(Frame_Ptr);
+            end if;
+
+         when 5 | 7 =>
+            if CLINT_Enabled then
+               Arch.CLINT.Clear_Timer_Interrupt(Hart);
+               Scheduler.Scheduler_ISR(Frame_Ptr);
+            end if;
+
+         when 9 | 11 =>
+            if PLIC_Enabled then
+               declare
+                  IRQ : Integer := Integer(Arch.PLIC.Claim(Hart, 0));
+               begin
+                  if IRQ in IRQ_Table'Range then
+                     IRQ_Counts(IRQ) := IRQ_Counts(IRQ) + 1;
+                     Arch.Debug.Print("Dispatching IRQ " & Integer'Image(IRQ) & " Count=" & Natural'Image(IRQ_Counts(IRQ)));
+                     if IRQ_Table(IRQ) /= null then
+                        IRQ_Table(IRQ).all;
+                     else
+                        Arch.Debug.Print("No handler registered for IRQ " & Integer'Image(IRQ));
+                     end if;
+                     Arch.PLIC.Complete(Hart, 0, Unsigned_64(IRQ));
                   end if;
-               else
-                  Arch.Debug.Print("Invalid IRQ value " & Integer'Image(IRQ));
-               end if;
-               Arch.PLIC.Complete(Hart_ID, Context_ID, Unsigned_64(IRQ));
-            end;
+               end;
+            end if;
+
+         when 8 | 9 =>
+            Syscall_Handler(Frame_Ptr);
+
          when others =>
-            Lib.Panic.Hard_Panic("Unhandled interrupt: " & Unsigned_64'Image(Cause), Frame_Ptr);
+            Arch.Debug.Print("Unhandled scause=" & Unsigned_64'Image(Cause));
+            Lib.Panic.Hard_Panic("Unhandled IRQ", Frame_Ptr);
       end case;
    end Handle_Interrupt;
+
+   procedure Handle_Trap (Frame_Ptr : access Frame) is
+   begin
+      Arch.Debug.Print("[trap] scause=" & Unsigned_64'Image(Frame_Ptr.scause));
+      Arch.Debug.Print("[trap] sepc=" & Unsigned_64'Image(Frame_Ptr.sepc));
+      Arch.Debug.Print("[trap] sstatus=" & Unsigned_64'Image(Frame_Ptr.sstatus));
+   
+   begin
+      Handle_Interrupt (Frame_Ptr.all);
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic("[trap] Unhandled trap exception occurred", Frame_Ptr.all);
+   end;
+
+      System.Machine_Code.Asm ("j trap_exit", Volatile => True);
+   end Arch.Interrupts.Handle_Trap;
 
    procedure Save_FP_Context (Frame_Ptr : in out Frame) is
    begin
       if Frame_Ptr.FP_Context_Ptr = System.Null_Address then
-         declare
-            New_FP : aliased Arch.Context.FP_Context;
-         begin
-            Arch.Context.Init_FP_Context (New_FP);
-            Frame_Ptr.FP_Context_Ptr := New_FP'Address;
-         end;
+         return;
       end if;
-
       declare
-         Access_FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
+         FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
       begin
-         Arch.Context.Save_FP_Context (Access_FP.all);
+         Arch.Context.Save_FP_Context(FP.all);
       end;
    end Save_FP_Context;
 
@@ -145,9 +158,9 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    begin
       if Frame_Ptr.FP_Context_Ptr /= System.Null_Address then
          declare
-            Access_FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
+            FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
          begin
-            Arch.Context.Load_FP_Context (Access_FP.all);
+            Arch.Context.Load_FP_Context(FP.all);
          end;
       end if;
    end Restore_FP_Context;
@@ -163,22 +176,14 @@ package body Arch.Interrupts with SPARK_Mode => Off is
 
       Arch.Debug.Print("Syscall_Handler: Thread ID = " & Natural'Image(Scheduler.Convert(Thread_ID)));
       Scheduler.Signal_Kernel_Entry (Thread_ID);
-      State.x10_a0 := State.x17_a7;
-      State.x11_a1 := 0;
+      Dispatch_Syscall(State, State.x10_a0, State.x11_a1);
       Scheduler.Signal_Kernel_Exit (Thread_ID);
    end Syscall_Handler;
 
-   procedure Scheduler_Handler (State : in out Frame) is
-      Thread_ID : constant Scheduler.TID := Arch.Local.Get_Current_Thread;
+   procedure Handle_Trap (Frame_Ptr : access Frame) is
    begin
-      if Thread_ID = Scheduler.Error_TID then
-         Arch.Debug.Print("Scheduler_Handler: Error_TID encountered!");
-         Lib.Panic.Hard_Panic("Scheduler invoked with Error_TID", State);
-         return;
-      end if;
-
-      Arch.Debug.Print("Scheduler_Handler: Thread ID = " & Natural'Image(Scheduler.Convert(Thread_ID)));
-      Scheduler.Scheduler_ISR (State);
-   end Scheduler_Handler;
+      Handle_Interrupt(Frame_Ptr.all);
+      Restore_FP_Context(Frame_Ptr.all);
+   end Handle_Trap;
 
 end Arch.Interrupts;
