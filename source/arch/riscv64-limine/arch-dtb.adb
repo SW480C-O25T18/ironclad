@@ -424,4 +424,19 @@ package body Arch.DTB with SPARK_Mode => Off is
       end if;
    end Find_Node_By_Compatible;
 
+   procedure Register_All_Device_IRQs is
+   begin
+      for Node of Device_Tree loop
+         if Node.Has_IRQ then
+            if To_String(Node.Name) = "uart0" then
+               Arch.Debug.Print("Registering UART0 IRQ");
+               Arch.Interrupts.Register_Device_IRQ(Node'Access, Handler => Devices.UART.UART0_Interrupt_Handler'Access);
+            else
+               Arch.Debug.Print("Registering " & To_String(Node.Name) & " IRQ with null handler.");
+               Arch.Interrupts.Register_Device_IRQ(Node'Access, Handler => null);
+            end if;
+         end if;
+      end loop;
+   end Register_All_Device_IRQs;
+
 end Arch.DTB;
