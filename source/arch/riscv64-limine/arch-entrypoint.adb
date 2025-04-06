@@ -53,9 +53,14 @@ package body Arch.Entrypoint is
    -- This procedure is called as soon as control is transferred from the bootloader.
    ------------------------------------------------------------------------------
    procedure Bootstrap_Main is
-      Info : Boot_Information renames Limine.Global_Info;
-      Addr : System.Address;
+      Info      : Boot_Information renames Limine.Global_Info;
+      Addr      : System.Address;
       Num_Harts : Unsigned_64;
+      -- Declare local variables for DTB nodes and properties without initializing them here.
+      CLINT_Node : DTB_Node_Access;
+      PLIC_Node  : DTB_Node_Access;
+      CLINT_Reg  : Unsigned_64_Array;
+      PLIC_Reg   : Unsigned_64_Array;
    begin
       -- Initialize basic hardware state.
       Devices.UART.Init_UART0;
@@ -71,12 +76,6 @@ package body Arch.Entrypoint is
          Lib.Panic.Hard_Panic("No DTB was found!", System.Null_Address);
       end if;
       Arch.Debug.Print("DTB initialized successfully");
-
-      --  Initialize device discovery facilities.
-      Debug.Print ("Initializing DTB discovery");
-      if not Arch.DTB.Init then
-         Lib.Panic.Hard_Panic ("No DTB was found!");
-      end if;
 
       --  Initialize the allocators and MMU.
       Debug.Print ("Initializing allocators and MMU");
@@ -114,16 +113,78 @@ package body Arch.Entrypoint is
       Num_Harts := Arch.CPU.Core_Count;
       Arch.Debug.Print("CPU cores initialized: " & Unsigned_64'Image(Num_Harts));
 
-      -- Configure interrupt controllers using DTB-derived (or default) values.
-      Arch.Debug.Print("Configuring CLINT and PLIC");
+   ------------------------------------------------------------------------------
+   -- Configure CLINT and PLIC using DTB and SMP information.
+   -- For the CLINT, we retrieve the "reg" property from the node with a compatible
+   -- string "riscv,clint". For the PLIC, we retrieve the "reg" property from the node
+   -- with compatible "riscv,plic" and use Num_Harts to set the number of harts.
+   ------------------------------------------------------------------------------
+   Arch.Debug.Print ("Search for CLINT node in DTB");
+   --  The CLINT node is searched by compatible string "riscv,clint".
+   --  If not found, fallback to "riscv,interrupt-controller".
+   --  This is a common pattern in DTBs for RISC-V systems.
+   CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,clint");
+   Arch.Debug.Print ("CLINT_Node: " & CLINT_Node'Image);
+   if CLINT_Node = null then
+      CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
+      Arch.Debug.Print ("CLINT_Node (fallback): " & CLINT_Node'Image);
+   end if;
+   if CLINT_Node /= null then
+      CLINT_Reg := Arch.DTB.Get_Property_Unsigned_64(CLINT_Node, "reg");
+      if CLINT_Reg'Length >= 4 then
+         Arch.CLINT.Set_CLINT_Configuration(
+            Base_Address    => To_Address(CLINT_Reg(1)),
+            MSIP_Offset     => CLINT_Reg(2),
+            MTime_Offset    => CLINT_Reg(3),
+            MTimecmp_Offset => CLINT_Reg(4),
+            Enabled         => True);
+         Arch.Debug.Print("CLINT configured from DTB.");
+      else
+         Arch.Debug.Print("CLINT DTB information incomplete; using defaults.");
+         Arch.CLINT.Set_CLINT_Configuration;
+      end if;
+   else
+      Arch.Debug.Print("CLINT node not found in DTB; using defaults.");
       Arch.CLINT.Set_CLINT_Configuration;
-      Arch.PLIC.Set_PLIC_Configuration;
-      Arch.Debug.Print("CLINT and PLIC configured");
+   end if;
 
-      -- Initialize the interrupt controllers (CLINT and PLIC) for each core.
-      Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
-      Arch.Interrupts.Initialize;
-      Arch.Debug.Print("Interrupt controllers initialized");
+   Arch.Debug.Print ("Search for PLIC node in DTB");
+   --  The PLIC node is searched by compatible string "riscv,plic" or fallback to "riscv,interrupt-controller".
+   PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,plic");
+   Arch.Debug.Print ("PLIC_Node: " & PLIC_Node'Image);
+   if PLIC_Node = null then
+      PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
+      Arch.Debug.Print ("PLIC_Node (fallback): " & PLIC_Node'Image);
+   end if;
+   if PLIC_Node /= null then
+      PLIC_Reg := Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
+      if PLIC_Reg'Length >= 2 then
+         Arch.PLIC.Set_PLIC_Configuration(
+            Base_Address         => To_Address(PLIC_Reg(1)),
+            Priority_Offset      => 0,  -- Assume priority registers start at offset 0
+            Context_Base_Offset  => PLIC_Reg(2),
+            Context_Stride       => 16#1000#,  -- Default stride (adjust if DTB provides a value)
+            Threshold_Offset     => 0,
+            Max_Interrupt_ID     => 1023,
+            Max_Harts            => Num_Harts,  -- Use the number of harts from SMP
+            Contexts_Per_Hart    => 1,          -- Default; adjust if needed
+            Enabled              => True);
+         Arch.Debug.Print("PLIC configured from DTB and SMP response.");
+      else
+         Arch.Debug.Print("PLIC DTB information incomplete; using defaults.");
+         Arch.PLIC.Set_PLIC_Configuration;
+      end if;
+   else
+      Arch.Debug.Print("PLIC node not found in DTB; using defaults.");
+      Arch.PLIC.Set_PLIC_Configuration;
+   end if;
+
+   ------------------------------------------------------------------------------
+   -- Initialize interrupt controllers (per core initialization).
+   ------------------------------------------------------------------------------
+   Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
+   Arch.Interrupts.Initialize;
+   Arch.Debug.Print("Interrupt controllers initialized");
 
       --  Go to main kernel.
       Debug.Print ("Copying command line");

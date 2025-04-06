@@ -48,6 +48,7 @@ package Arch.CPU is
 
    --  Init the cores and BSP.
    procedure Init_Cores;
+   procedure Set_Trap_Vector;
 
 private
 

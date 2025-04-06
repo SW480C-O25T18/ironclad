@@ -108,4 +108,34 @@ package body Arch.CPU with SPARK_Mode => Off is
           Current_Process => Userland.Process.Error_PID);
       Debug.Print ("Init_Common: Core_Locals (" & Core_Number'Image & ") = " & Core_Locals (Core_Number)'Image);
    end Init_Common;
+
+   ----------------------------------------------------------------------------
+   --  Set the trap vector to the entry point of trap_entry.
+   --  This is the entry point for all traps and interrupts.
+   --  The stvec CSR is used to set the trap vector.
+   -- 
+   -- The stvec CSR is a 64-bit register that holds the address of the
+   -- trap vector. The lower 2 bits of the address are used to determine
+   -- the mode of the trap vector. The upper 62 bits are used to hold the
+   -- address of the trap vector. The lower 2 bits are set to 0b00 to
+   -- indicate that the trap vector is in direct mode. In direct mode,
+   -- the address of the trap vector is used directly as the entry point
+   -- for the trap handler. In vectored mode, the address of the trap vector
+   -- is used as a base address, and the lower 10 bits of the trap number
+   -- are used as an offset to determine the entry point for the trap handler.
+   --
+   -- The stvec CSR is set to the address of the trap_entry function, which
+   -- is defined in the arch-trap.S file. 
+   -- The trap_entry function is responsible for saving the context of the current 
+   -- thread and handling the trap.
+   -- The trap_exit function is defined in the arch-trap.S file. It is responsible
+   -- for restoring the context of the current thread and returning to the userland process.
+   ----------------------------------------------------------------------------
+   procedure Set_Trap_Vector is
+   begin
+      -- Write the address of trap_entry into the stvec CSR.
+      System.Machine_Code.Asm("csrw stvec, %0", 
+         Inputs   => Unsigned_64'Asm_Input("r", trap_entry'Address),
+         Volatile => True);
+   end Set_Trap_Vector;
 end Arch.CPU;
