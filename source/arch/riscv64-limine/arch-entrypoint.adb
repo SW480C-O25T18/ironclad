@@ -25,25 +25,52 @@ with Lib.Panic;
 with Arch.DTB;
 with Arch.CPU;
 with Main;
+with Arch.Interrupts;
+with Arch.Local;
 
 #if KASAN
    with Lib.KASAN;
 #end if;
 
 package body Arch.Entrypoint is
+
+   ------------------------------------------------------------------------------
+   -- Bootstrap_Main
+   --
+   -- The kernel entrypoint as provided by Limine. This procedure performs
+   -- early hardware initialization, including:
+   --   1. Initializing UART for early debug output.
+   --   2. Translating the Limine protocol into architecture-agnostic structures.
+   --   3. Parsing the DTB to extract hardware configuration.
+   --   4. Initializing the physical memory allocator and MMU.
+   --   5. Enabling logging (and KASAN if configured).
+   --   6. Printing the physical memory map.
+   --   7. Initializing CPU cores and their local state.
+   --   8. Initializing the interrupt controllers (PLIC and CLINT) dynamically.
+   --   9. Copying the kernel command line.
+   --  10. Jumping to the main kernel entry point.
+   --
+   -- This procedure is called as soon as control is transferred from the bootloader.
+   ------------------------------------------------------------------------------
    procedure Bootstrap_Main is
       Info : Boot_Information renames Limine.Global_Info;
       Addr : System.Address;
+      Num_Harts : Unsigned_64;
    begin
-      --  Initialize architectural state first.
+      -- Initialize basic hardware state.
       Devices.UART.Init_UART0;
+      Lib.Messages.Put_Line("Hello from kernel entrypoint");
 
-      Lib.Messages.Put_Line ("Hello");
-
-      loop null; end loop;
-
-      --  Translate the limine protocol into arch-agnostic structures.
+      -- Translate the Limine protocol into architecture-agnostic structures.
+      Arch.Debug.Print("Translating Limine protocol");
       Limine.Translate_Proto;
+
+      -- Initialize the Device Tree Blob (DTB) to obtain hardware configuration.
+      Arch.Debug.Print("Initializing DTB discovery");
+      if not Arch.DTB.Init then
+         Lib.Panic.Hard_Panic("No DTB was found!", System.Null_Address);
+      end if;
+      Arch.Debug.Print("DTB initialized successfully");
 
       --  Initialize device discovery facilities.
       Debug.Print ("Initializing DTB discovery");
@@ -81,10 +108,22 @@ package body Arch.Entrypoint is
              Boot_Memory_Type'Image (E.MemType));
       end loop;
 
-      --  Initialize the other cores of the system.
-      Debug.Print ("Initializing cores");
+      -- Initialize CPU cores.
+      Arch.Debug.Print("Initializing CPU cores");
       Arch.CPU.Init_Cores;
-      Debug.Print ("Cores initialized");
+      Num_Harts := Arch.CPU.Core_Count;
+      Arch.Debug.Print("CPU cores initialized: " & Unsigned_64'Image(Num_Harts));
+
+      -- Configure interrupt controllers using DTB-derived (or default) values.
+      Arch.Debug.Print("Configuring CLINT and PLIC");
+      Arch.CLINT.Set_CLINT_Configuration;
+      Arch.PLIC.Set_PLIC_Configuration;
+      Arch.Debug.Print("CLINT and PLIC configured");
+
+      -- Initialize the interrupt controllers (CLINT and PLIC) for each core.
+      Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
+      Arch.Interrupts.Initialize;
+      Arch.Debug.Print("Interrupt controllers initialized");
 
       --  Go to main kernel.
       Debug.Print ("Copying command line");
