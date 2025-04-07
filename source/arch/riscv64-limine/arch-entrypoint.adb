@@ -124,11 +124,18 @@ package body Arch.Entrypoint is
       --  If not found, fallback to "riscv,interrupt-controller".
       --  This is a common pattern in DTBs for RISC-V systems.
       CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,clint");
-      Arch.Debug.Print ("CLINT_Node: " & CLINT_Node'Image);
       if CLINT_Node = null then
          CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
          Arch.Debug.Print ("CLINT_Node (fallback): " & CLINT_Node'Image);
       end if;
+      -- output the node for debugging
+      if CLINT_Node /= null then
+         Print_DTB_Node(CLINT_Node);
+      else
+         Arch.Debug.Print("No DTB root node available.");
+      end if;
+      -- The CLINT_Node is configured with the "reg" property.
+      -- The "reg" property is expected to contain the base address and offsets for MSIP, MTime, and MTimecmp.
       if CLINT_Node /= null then
          CLINT_Reg := Arch.DTB.Get_Property_Unsigned_64(CLINT_Node, "reg");
          if CLINT_Reg'Length >= 4 then
@@ -151,12 +158,17 @@ package body Arch.Entrypoint is
       Arch.Debug.Print ("Search for PLIC node in DTB");
       --  The PLIC node is searched by compatible string "riscv,plic" or fallback to "riscv,interrupt-controller".
       PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,plic");
-      -- output the node name for debugging
-      Arch.Debug.Print ("PLIC_Node: " & PLIC_Node'Image);
       if PLIC_Node = null then
          PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
          Arch.Debug.Print ("PLIC_Node (fallback): " & PLIC_Node'Image);
       end if;
+      -- output the node for debugging
+      if PLIC_Node /= null then
+         Print_DTB_Node(PLIC_Node);
+      else
+         Arch.Debug.Print("No DTB root node available.");
+      end if;
+      -- The PLIC_Node is configured with the "reg" property.
       if PLIC_Node /= null then
          PLIC_Reg := Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
          if PLIC_Reg'Length >= 2 then
