@@ -515,7 +515,8 @@ begin
    -- Print properties.
    if DTB_Property_Vector.Length(Node.Properties) > 0 then
       Arch.Debug.Print(Indent & "  Properties:");
-      for I in DTB_Property_Vector.Range(Node.Properties) loop
+      for I in DTB_Property_Vector.First_Index(Node.Properties) ..
+               DTB_Property_Vector.Last_Index(Node.Properties) loop
          declare
             Prop : DTB_Property_Type := DTB_Property_Vector.Element(Node.Properties, I);
          begin
@@ -533,7 +534,8 @@ begin
    -- Print children.
    if DTB_Node_Vector.Length(Node.Children) > 0 then
       Arch.Debug.Print(Indent & "  Children:");
-      for I in DTB_Node_Vector.Range(Node.Children) loop
+      for I in DTB_Node_Vector.First_Index(Node.Children) ..
+               DTB_Node_Vector.Last_Index(Node.Children) loop
          declare
             Child : DTB_Node_Access := Node.Children(I);
          begin
