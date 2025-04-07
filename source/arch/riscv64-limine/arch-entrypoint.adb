@@ -28,9 +28,9 @@ with Main;
 with Arch.Interrupts;
 with Arch.Local;
 
-#if KASAN
-   with Lib.KASAN;
-#end if;
+--  #if KASAN
+--     with Lib.KASAN;
+--  #end if;
 
 package body Arch.Entrypoint is
 
@@ -92,11 +92,11 @@ package body Arch.Entrypoint is
       Debug.Print ("Enabling logging");
       Lib.Messages.Enable_Logging;
       Debug.Print ("Logging enabled");
-      #if KASAN
-         Debug.Print ("Initializing KASAN");
-         Lib.KASAN.Init;
-         Debug.Print ("KASAN initialized");
-      #end if;
+      --  #if KASAN
+      --     Debug.Print ("Initializing KASAN");
+      --     Lib.KASAN.Init;
+      --     Debug.Print ("KASAN initialized");
+      --  #end if;
 
       --  Print the memory map, it is useful at times.
       Lib.Messages.Put_Line ("Physical memory map:");
