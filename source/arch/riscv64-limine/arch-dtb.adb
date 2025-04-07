@@ -505,50 +505,74 @@ package body Arch.DTB with SPARK_Mode => Off is
       end if;
    end Get_Property_Unsigned_64;
 
+   ------------------------------------------------------------------------------
+   -- Helper Function: Property_Value_To_String
+   -- Reads a block of memory starting at Value for Length bytes and converts it to
+   -- an Unbounded_String. This function does not assume a terminating NUL; it reads
+   -- exactly Length bytes.
+   ------------------------------------------------------------------------------
+   function Property_Value_To_String (Value : System.Address; Length : Natural)
+      return Unbounded_String is
+      type Byte_Ptr is access all Unsigned_8;
+      Ptr : Byte_Ptr := Value'To_Access(Byte_Ptr);
+      Result : Unbounded_String := To_Unbounded_String("");
+   begin
+      for I in 1 .. Length loop
+         Result := Result & To_Unbounded_String(Character'Val(Integer(Ptr(I))));
+      end loop;
+      return Result;
+   end Property_Value_To_String;
+
+   ------------------------------------------------------------------------------
+   -- Procedure: Print_DTB_Node
+   -- Recursively prints a DTB node’s information: its name, each property
+   -- (with name, length, value address, and its value as a string), and its children.
+   ------------------------------------------------------------------------------
    procedure Print_DTB_Node
-  (Node   : DTB_Node_Access;
-   Indent : String := "") is
-begin
-   -- Print the node's name.
-   Arch.Debug.Print(Indent & "Node Name: " & To_String(Node.Name));
+      (Node   : DTB_Node_Access;
+       Indent : String := "") is
+   begin
+      -- Print the node's name.
+      Arch.Debug.Print(Indent & "Node Name: " & To_String(Node.Name));
 
-   -- Print properties.
-   if DTB_Property_Vector.Length(Node.Properties) > 0 then
-      Arch.Debug.Print(Indent & "  Properties:");
-      for I in DTB_Property_Vector.First_Index(Node.Properties) ..
-               DTB_Property_Vector.Last_Index(Node.Properties) loop
-         declare
-            Prop : DTB_Property_Type := DTB_Property_Vector.Element(Node.Properties, I);
-         begin
-            -- Print property name, length, and address of its value.
-            Arch.Debug.Print(Indent & "    " &
-                              "Name: " & To_String(Prop.Name) &
-                              ", Length: " & Natural'Image(Prop.Length) &
-                              ", Value Address: " & System.Address'Image(Prop.Value));
-         end;
-      end loop;
-   else
-      Arch.Debug.Print(Indent & "  (No Properties)");
-   end if;
+      -- Print properties.
+      if DTB_Property_Vector.Length(Node.Properties) > 0 then
+         Arch.Debug.Print(Indent & "  Properties:");
+         for I in DTB_Property_Vector.First_Index(Node.Properties) ..
+                 DTB_Property_Vector.Last_Index(Node.Properties) loop
+            declare
+               Prop : DTB_Property_Type := DTB_Property_Vector.Element(Node.Properties, I);
+               -- Convert property value to string using the property length.
+               Prop_Str : Unbounded_String := Property_Value_To_String(Prop.Value, Prop.Length);
+            begin
+               Arch.Debug.Print(Indent & "    " &
+                                 "Name: " & To_String(Prop.Name) &
+                                 ", Length: " & Natural'Image(Prop.Length) &
+                                 ", Value Address: " & System.Address'Image(Prop.Value));
+               Arch.Debug.Print(Indent & "      Value (string): " & To_String(Prop_Str));
+            end;
+         end loop;
+      else
+         Arch.Debug.Print(Indent & "  (No Properties)");
+      end if;
 
-   -- Print children.
-   if DTB_Node_Vector.Length(Node.Children) > 0 then
-      Arch.Debug.Print(Indent & "  Children:");
-      for I in DTB_Node_Vector.First_Index(Node.Children) ..
-               DTB_Node_Vector.Last_Index(Node.Children) loop
-         declare
-            Child : DTB_Node_Access := Node.Children(I);
-         begin
-            if Child /= null then
-               -- Recursively print each child node with increased indent.
-               Print_DTB_Node(Child, Indent & "    ");
-            else
-               Arch.Debug.Print(Indent & "    (Null Child)");
-            end if;
-         end;
-      end loop;
-   else
-      Arch.Debug.Print(Indent & "  (No Children)");
-   end if;
-end Print_DTB_Node;
+      -- Print children.
+      if DTB_Node_Vector.Length(Node.Children) > 0 then
+         Arch.Debug.Print(Indent & "  Children:");
+         for I in DTB_Node_Vector.First_Index(Node.Children) ..
+                 DTB_Node_Vector.Last_Index(Node.Children) loop
+            declare
+               Child : DTB_Node_Access := Node.Children(I);
+            begin
+               if Child /= null then
+                  Print_DTB_Node(Child, Indent & "    ");
+               else
+                  Arch.Debug.Print(Indent & "    (Null Child)");
+               end if;
+            end;
+         end loop;
+      else
+         Arch.Debug.Print(Indent & "  (No Children)");
+      end if;
+   end Print_DTB_Node;
 end Arch.DTB;
