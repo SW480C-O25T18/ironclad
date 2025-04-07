@@ -34,7 +34,7 @@ package body Arch.Hooks is
 
    function Devices_Hook return Boolean is
    begin
-      Debug.Print ("Initializing UART0");
+      Debug.Print ("Devices_Hook: Initializing UART0");
       return Devices.UART.Init_UART0;
    end Devices_Hook;
 
@@ -73,27 +73,27 @@ package body Arch.Hooks is
    procedure Panic_SMP_Hook is
    begin
       null;
-      Lib.Messages.Put_Line ("Panic: System Halted");
+      Lib.Messages.Put_Line ("Panic_SMP_Hook: Panic: System Halted");
    end Panic_SMP_Hook;
 
    function Get_Active_Core_Count return Positive is
    begin
-      Debug.Print ("Getting active core count");
+      Debug.Print ("Arch.Hooks.Get_Active_Core_Count: Getting active core count");
       return Core_Count;
    end Get_Active_Core_Count;
 
    procedure Register_RAM_Files is
    begin
-   Debug.Print ("Registering RAM files");
+   Debug.Print ("Register_RAM_Files: Registering RAM files");
       if not Devices.Ramdev.Init
          (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len), 
-         Debug.Print("RAM files loaded"))
+         Debug.Print("Register_RAM_Files: RAM files loaded"))
       then
-         Lib.Messages.Put_Line ("Could not load RAM files");
+         Lib.Messages.Put_Line ("Register_RAM_Files: Could not load RAM files");
       end if;
    exception
       when Constraint_Error =>
-         Lib.Messages.Put_Line ("Errored while loading RAM files");
+         Lib.Messages.Put_Line ("Register_RAM_Files: Errored while loading RAM files");
    end Register_RAM_Files;
 
    pragma Inline (Read_TP); 
