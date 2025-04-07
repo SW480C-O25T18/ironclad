@@ -19,6 +19,8 @@ with Arch.Limine;
 
 package Arch.DTB with SPARK_Mode => Off is
    function Init return Boolean;
+   procedure Print_DTB_Node (Node   : DTB_Node_Access;
+      Indent : String := "");
 
 private
 

@@ -113,78 +113,90 @@ package body Arch.Entrypoint is
       Num_Harts := Arch.CPU.Core_Count;
       Arch.Debug.Print("CPU cores initialized: " & Unsigned_64'Image(Num_Harts));
 
-   ------------------------------------------------------------------------------
-   -- Configure CLINT and PLIC using DTB and SMP information.
-   -- For the CLINT, we retrieve the "reg" property from the node with a compatible
-   -- string "riscv,clint". For the PLIC, we retrieve the "reg" property from the node
-   -- with compatible "riscv,plic" and use Num_Harts to set the number of harts.
-   ------------------------------------------------------------------------------
-   Arch.Debug.Print ("Search for CLINT node in DTB");
-   --  The CLINT node is searched by compatible string "riscv,clint".
-   --  If not found, fallback to "riscv,interrupt-controller".
-   --  This is a common pattern in DTBs for RISC-V systems.
-   CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,clint");
-   Arch.Debug.Print ("CLINT_Node: " & CLINT_Node'Image);
-   if CLINT_Node = null then
-      CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
-      Arch.Debug.Print ("CLINT_Node (fallback): " & CLINT_Node'Image);
-   end if;
-   if CLINT_Node /= null then
-      CLINT_Reg := Arch.DTB.Get_Property_Unsigned_64(CLINT_Node, "reg");
-      if CLINT_Reg'Length >= 4 then
-         Arch.CLINT.Set_CLINT_Configuration(
-            Base_Address    => To_Address(CLINT_Reg(1)),
-            MSIP_Offset     => CLINT_Reg(2),
-            MTime_Offset    => CLINT_Reg(3),
-            MTimecmp_Offset => CLINT_Reg(4),
-            Enabled         => True);
-         Arch.Debug.Print("CLINT configured from DTB.");
+      ------------------------------------------------------------------------------
+      -- Configure CLINT and PLIC using DTB and SMP information.
+      -- For the CLINT, we retrieve the "reg" property from the node with a compatible
+      -- string "riscv,clint". For the PLIC, we retrieve the "reg" property from the node
+      -- with compatible "riscv,plic" and use Num_Harts to set the number of harts.
+      ------------------------------------------------------------------------------
+      Arch.Debug.Print ("Search for CLINT node in DTB");
+      --  The CLINT node is searched by compatible string "riscv,clint".
+      --  If not found, fallback to "riscv,interrupt-controller".
+      --  This is a common pattern in DTBs for RISC-V systems.
+      CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,clint");
+      Arch.Debug.Print ("CLINT_Node: " & CLINT_Node'Image);
+      if CLINT_Node = null then
+         CLINT_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
+         Arch.Debug.Print ("CLINT_Node (fallback): " & CLINT_Node'Image);
+      end if;
+      if CLINT_Node /= null then
+         CLINT_Reg := Arch.DTB.Get_Property_Unsigned_64(CLINT_Node, "reg");
+         if CLINT_Reg'Length >= 4 then
+            Arch.CLINT.Set_CLINT_Configuration(
+               Base_Address    => To_Address(CLINT_Reg(1)),
+               MSIP_Offset     => CLINT_Reg(2),
+               MTime_Offset    => CLINT_Reg(3),
+               MTimecmp_Offset => CLINT_Reg(4),
+               Enabled         => True);
+            Arch.Debug.Print("CLINT configured from DTB.");
+         else
+            Arch.Debug.Print("CLINT DTB information incomplete; using defaults.");
+            Arch.CLINT.Set_CLINT_Configuration;
+         end if;
       else
-         Arch.Debug.Print("CLINT DTB information incomplete; using defaults.");
+         Arch.Debug.Print("CLINT node not found in DTB; using defaults.");
          Arch.CLINT.Set_CLINT_Configuration;
       end if;
-   else
-      Arch.Debug.Print("CLINT node not found in DTB; using defaults.");
-      Arch.CLINT.Set_CLINT_Configuration;
-   end if;
 
-   Arch.Debug.Print ("Search for PLIC node in DTB");
-   --  The PLIC node is searched by compatible string "riscv,plic" or fallback to "riscv,interrupt-controller".
-   PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,plic");
-   Arch.Debug.Print ("PLIC_Node: " & PLIC_Node'Image);
-   if PLIC_Node = null then
-      PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
-      Arch.Debug.Print ("PLIC_Node (fallback): " & PLIC_Node'Image);
-   end if;
-   if PLIC_Node /= null then
-      PLIC_Reg := Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
-      if PLIC_Reg'Length >= 2 then
-         Arch.PLIC.Set_PLIC_Configuration(
-            Base_Address         => To_Address(PLIC_Reg(1)),
-            Priority_Offset      => 0,  -- Assume priority registers start at offset 0
-            Context_Base_Offset  => PLIC_Reg(2),
-            Context_Stride       => 16#1000#,  -- Default stride (adjust if DTB provides a value)
-            Threshold_Offset     => 0,
-            Max_Interrupt_ID     => 1023,
-            Max_Harts            => Num_Harts,  -- Use the number of harts from SMP
-            Contexts_Per_Hart    => 1,          -- Default; adjust if needed
-            Enabled              => True);
-         Arch.Debug.Print("PLIC configured from DTB and SMP response.");
+      Arch.Debug.Print ("Search for PLIC node in DTB");
+      --  The PLIC node is searched by compatible string "riscv,plic" or fallback to "riscv,interrupt-controller".
+      PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,plic");
+      -- output the node name for debugging
+      Arch.Debug.Print ("PLIC_Node: " & PLIC_Node'Image);
+      if PLIC_Node = null then
+         PLIC_Node := Arch.DTB.Find_Node_By_Compatible("riscv,interrupt-controller");
+         Arch.Debug.Print ("PLIC_Node (fallback): " & PLIC_Node'Image);
+      end if;
+      if PLIC_Node /= null then
+         PLIC_Reg := Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
+         if PLIC_Reg'Length >= 2 then
+            Arch.PLIC.Set_PLIC_Configuration(
+               Base_Address         => To_Address(PLIC_Reg(1)),
+               Priority_Offset      => 0,  -- Assume priority registers start at offset 0
+               Context_Base_Offset  => PLIC_Reg(2),
+               Context_Stride       => 16#1000#,  -- Default stride (adjust if DTB provides a value)
+               Threshold_Offset     => 0,
+               Max_Interrupt_ID     => 1023,
+               Max_Harts            => Num_Harts,  -- Use the number of harts from SMP
+               Contexts_Per_Hart    => 1,          -- Default; adjust if needed
+               Enabled              => True);
+            Arch.Debug.Print("PLIC configured from DTB and SMP response.");
+         else
+            Arch.Debug.Print("PLIC DTB information incomplete; using defaults.");
+            Arch.PLIC.Set_PLIC_Configuration;
+         end if;
       else
-         Arch.Debug.Print("PLIC DTB information incomplete; using defaults.");
+         Arch.Debug.Print("PLIC node not found in DTB; using defaults.");
          Arch.PLIC.Set_PLIC_Configuration;
       end if;
-   else
-      Arch.Debug.Print("PLIC node not found in DTB; using defaults.");
-      Arch.PLIC.Set_PLIC_Configuration;
-   end if;
 
-   ------------------------------------------------------------------------------
-   -- Initialize interrupt controllers (per core initialization).
-   ------------------------------------------------------------------------------
-   Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
-   Arch.Interrupts.Initialize;
-   Arch.Debug.Print("Interrupt controllers initialized");
+      ------------------------------------------------------------------------------
+      -- Initialize interrupt controllers (per core initialization).
+      -- This is done after the PLIC and CLINT have been configured.
+      -- The interrupt controllers are initialized for each core in the system.
+      ------------------------------------------------------------------------------
+      Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
+      Arch.Interrupts.Initialize;
+      Arch.Debug.Print("Interrupt controllers initialized");
+
+      ------------------------------------------------------------------------------
+      -- Set the trap entry point early, so that any trap is handled correctly.
+      -- This is done by writing the address of the trap_entry procedure to stvec.
+      -- Setting the trap vector after interrrupts are initialized so that they can be
+      -- handled correctly.
+      ------------------------------------------------------------------------------
+      Arch.Debug.Print("Setting trap entry vector");
+      Arch.CPU.Set_Trap_Vector;  -- This procedure writes trap_entry's address to stvec.
 
       --  Go to main kernel.
       Debug.Print ("Copying command line");
