@@ -209,28 +209,70 @@ package Arch.MMU is
 private
 
    #if ArchName = "riscv64-limine"
+
+      type Bit is mod 2**1 with Size => 1;
+      type Char is mod 2**8 with Size => 8;
+      type U2 is mod 2**2 with Size => 2;
+      type U9 is mod 2**9 with Size => 9;
+      type U26 is mod 2**26 with Size => 26;
+
+      type U7 is mod 2**7 with Size => 7;
+
+      type u64 is mod 2**64 with Size => 64;
+
+      type Page_Table_Entry is record
+         N        : Bit;
+         PBMT     : U2;
+         Reserved : U7;
+         PPN2     : U26;
+         PPN1     : U9;
+         PPN0     : U9;
+         RSW      : U2;
+         D        : Bit;
+         A        : Bit;
+         G        : Bit;
+         U        : Bit;
+         X        : Bit;
+         W        : Bit;
+         R        : Bit;
+         V        : Bit;
+      end record with size => 64;
+
+
+      for Page_Table_Entry use record
+         N        at 0 range 63 .. 63; -- Reserved for Svnapot extension..if not used must be zeroed by software
+         PBMT     at 0 range 61 .. 62; -- Svapot extension..if not used must be zeroed by software
+         Reserved at 0 range 54 .. 60; -- reserved for future use
+         PPN2     at 0 range 28 .. 53;
+         PPN1     at 0 range 19 .. 27;
+         PPN0     at 0 range 10 .. 18;
+         RSW      at 0 range 8 .. 9;
+         D        at 0 range 7 .. 7; -- dirty
+         A        at 0 range 6 .. 6; -- access
+         G        at 0 range 5 .. 5; -- global
+         U        at 0 range 4 .. 4; -- user
+         X        at 0 range 3 .. 3;
+         W        at 0 range 2 .. 2;
+         R        at 0 range 1 .. 1;
+         V        at 0 range 0 .. 0; -- valid
+      end record;
       subtype Index_Range is Integer range 0 .. 511;
 
-      type Page_Level is array (Index_Range) of Unsigned_64 with Size => 512 * 64; -- 512 entries × 64 bits = 4096 bytes
+      type Page_Level is array (Index_Range) of Page_Table_Entry with Size => 512 * 64; -- 512 entries × 64 bits = 4096 bytes
 
       type Page_Level_Acc is access all Page_Level;
 
+      subtype Page_Level_Count is u64 range 1 .. 3;
+
       type Page_Table is record
-         Root : Page_Level_Acc;
+         Root               : u64 := 0; -- starts at Satp_CSR
+         Page_Level         : Page_Level_Count := 1; --default should be 1
+         --  Satp_CSR           : u64 := 0; --bits leave empty for now
+         Page_Table_Entries : Page_Level_Acc;
+         Mutex           : aliased Lib.Synchronization.Readers_Writer_Lock;
       end record;
 
-      type Mapping_Range is record
-         Is_Valid       : Boolean;
-         Virtual_Start  : System.Address;
-         Physical_Start : System.Address;
-         Length         : Storage_Count;
-         Flags          : Page_Permissions;
-         Is_Dirty       : Boolean;
-         Is_Accessed    : Boolean;
-         -- add Next here if using a linked list
-      end record;
-
-      type PTE is new Unsigned_64; -- can be used for internal or leaf nodes
+      function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address;
 
    #end if;
 

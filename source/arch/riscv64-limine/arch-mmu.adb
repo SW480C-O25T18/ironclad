@@ -19,6 +19,17 @@ package body Arch.MMU is
    Global_Kernel_Usage : Memory.Size := 0;
    Global_Table_Usage  : Memory.Size := 0;
 
+   function Extract_Physical_Addr (PTE : Page_Table_Entry) return Interfaces.C.size_t is
+      use type Interfaces.C.size_t;
+      use type u64;
+      PPN : u64;
+   begin
+      PPN := u64(PTE.PPN0) or Shift_Left(u64(PTE.PPN1), 9) or Shift_Left(u64(PTE.PPN2), 18);
+      
+      return Interfaces.C.size_t(Shift_Left(PPN, 12));
+   end Extract_Physical_Addr;
+
+
    function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
       pragma Unreferenced (Memmap);
    begin
@@ -43,59 +54,60 @@ package body Arch.MMU is
       Last_Range : Mapping_Range_Acc;
 
 
-      function Is_Valid_Entry (P : Unsigned_64) return Boolean is
 
+      function Is_Valid_Entry (Map : in out Page_Table_Acc return Boolean is
       begin
-      return (P and 16#001#) /= 0;
+      return (Map.Page_Table_Entries.V) /= 0;
       end Is_Valid_Entry;
 
-      function Extract_Physical_Addr (P : Unsigned_64) return Interfaces.C.size_t is
-      PPN : Unsigned_64 := (P and 16#FFFFFFFFFFFFF000#);  -- need to check
-      begin
-      return Interfaces.C.size_t(PPN);
-      end Extract_Physical_Addr;
 
    begin
 
    -- add lock here
+      Lib.Synchronization.Seize_Writer (Map.Mutex);
 
       if Map.Root = null then
          -- Nothing to do if there's no root table
          Free_Page_Table (Map);
          return;
       end if;
-
-      -- L3 is the top-level array pointed to by Map.Root
       
       for i in Index_Range loop
          declare
-            L3_Entry : Unsigned_64 := Map.Root(i);
+            L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
+            L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
          begin
             if Is_Valid_Entry(L3_Entry) then
                
                L2_Phys := Extract_Physical_Addr(L3_Entry);
 
-               L2_Virt := To_Address(Memory_Offset + L2_Phys);
+               --  L2_Virt := To_Address(Memory_Offset + L2_Phys);
                declare
-                  L2 : Page_Level
-                  with Import, Address => L2_Virt;
+                  L2 : Page_Level;
+                  --  with Import, Address => L2_Virt;
 
                begin
                   -- Walk all 512 entries in L2
                   for j in Index_Range loop
-                     if Is_Valid_Entry(L2(j)) then
-                        L1_Phys := Extract_Physical_Addr(L2(j));
-                        L1_Virt := To_Address(Memory_Offset + L1_Phys);
+                     
+                     L2_Entry_Addr : Unsigned_64 := j * 64;
+                     L2_Entry : Page_Table_Entry with Address => L2_Entry_Addr'Address;
+
+                     if Is_Valid_Entry(L2_Entry) then
+                        L1_Phys := Extract_Physical_Addr(L2_Entry);
+                        --  L1_Virt := To_Address(Memory_Offset + L1_Phys);
 
                         declare
-                           L1 : Page_Level
-                           with Import, Address => L1_Virt;
+                           L1 : Page_Level;
+                           --  with Import, Address => L1_Virt;
                         begin
                            -- Walk all 512 entries in L1
                            for k in Index_Range loop
-                              if Is_Valid_Entry(L1(k)) then
+                              L1_Entry_Addr : Unsigned_64 := k * 64;
+                              L1_Entry : Page_Table_Entry with Address => L1_Entry_Addr'Address;
+                              if Is_Valid_Entry(L1_Entry) then
                                  -- L1(k) references an actual page frame
-                                 Frame_Phys := Extract_Physical_Addr(L1(k));
+                                 Frame_Phys := Extract_Physical_Addr(L1_Entry);
                                  -- Free the final data page
                                  Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
                               end if;
