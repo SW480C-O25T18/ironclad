@@ -217,8 +217,11 @@ private
       type U26 is mod 2**26 with Size => 26;
 
       type U7 is mod 2**7 with Size => 7;
-
       type u64 is mod 2**64 with Size => 64;
+      
+      type U4 is mod 2**4 with Size => 4;
+      type U16 is mod 2**16 with Size => 16;
+      type U44 is mod 2**44 with Size => 44;
 
       type Page_Table_Entry is record
          N        : Bit;
@@ -272,6 +275,19 @@ private
          Mutex           : aliased Lib.Synchronization.Readers_Writer_Lock;
       end record;
 
+      type Satp_Register is record
+         Sv_Type : U4;
+         ASID    : U16;
+         PPN     : U44;
+      end record with size => 64;
+
+      For Satp_Register use record
+         Sv_Type: at 0 range 60 ..63;
+         ASID: at 0 range 44 .. 59;
+         PPN: at 0 range 0 .. 43;
+      end record;
+
+      function Extract_Satp_Data: (Addr : u64) return Satp_Register;
       function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address;
 
    #end if;
