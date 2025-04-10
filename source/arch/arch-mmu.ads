@@ -221,6 +221,10 @@ private
       type U4 is mod 2**4 with Size => 4;
       type U16 is mod 2**16 with Size => 16;
       type U44 is mod 2**44 with Size => 44;
+      
+      type U4 is mod 2**4 with Size => 4;
+      type U16 is mod 2**16 with Size => 16;
+      type U44 is mod 2**44 with Size => 44;
 
       type Page_Table_Entry is record
          N        : Bit;

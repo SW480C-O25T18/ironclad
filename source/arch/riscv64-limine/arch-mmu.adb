@@ -30,8 +30,29 @@ package body Arch.MMU is
       return Interfaces.C.size_t(Shift_Left(PPN, 12)); -- change to use Physical_Address()
    end Extract_Physical_Addr;
 
+<<<<<<< HEAD
    function Extract_Satp_Data (Satp_Content : u64) return Satp_Register is
       Result : Satp_Register;
+=======
+   function Extract_Satp_Data (Addr : u64) return Satp_Register is
+      Result : Satp_Register;
+   begin
+      -- Bits 60..63 => Sv_Type
+      Result.Sv_Type := U4((Shift_Right (Addr, 60)) and 16#F#); 
+
+      -- Bits 44..59 => ASID (16 bits)
+      Result.ASID := U16((Shift_Right(Addr, 44)) and 16#FFFF#); 
+
+      -- Bits 0..43 => PPN (44 bits)
+      -- We can mask off the low 44 bits with (1 << 44) - 1
+      Result.PPN := U44(Addr and ((Shift_Left(1,44)) - 1)); 
+
+      return Result;
+   end Extract_Satp_Data;
+
+   function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
+      pragma Unreferenced (Memmap);
+>>>>>>> 5571d86 (updated get satp functions)
    begin
       -- Bits 60..63 => Sv_Type
       Result.Sv_Type := U4((Shift_Right (Addr, 60)) and 16#F#); 
@@ -332,11 +353,18 @@ end Init;
 --        Last_Range : Mapping_Range_Acc;
 
 
+<<<<<<< HEAD
 
 --        function Is_Valid_Entry (Map : in out Page_Table_Acc) return Boolean is
 --        begin
 --        return (Map.Page_Table_Entries.V) /= 0;
 --        end Is_Valid_Entry;
+=======
+   begin
+ -- todo: adjust to use satp that points to the correct ppn of the root table, should be done in init??
+   -- add lock here
+      Lib.Synchronization.Seize_Writer (Map.Mutex);
+>>>>>>> 5571d86 (updated get satp functions)
 
 
 --     begin
@@ -350,12 +378,21 @@ end Init;
 --           return;
 --        end if;
       
+<<<<<<< HEAD
 --        for i in 1 .. 256 loop -- avoid kernel-space entries Page_Table_Entries
 --           declare
 --              L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
 --              L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
 --           begin
 --              if Is_Valid_Entry(L3_Entry) then
+=======
+      for i in 1 .. 256 loop -- avoid kernel-space entries
+         declare
+            L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
+            L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
+         begin
+            if Is_Valid_Entry(L3_Entry) then
+>>>>>>> 5571d86 (updated get satp functions)
                
 --                 L2_Phys := Extract_Physical_Addr(L3_Entry);
 
@@ -375,6 +412,7 @@ end Init;
 --                          L1_Phys := Extract_Physical_Addr(L2_Entry);
 --                          --  L1_Virt := To_Address(Memory_Offset + L1_Phys);
 
+<<<<<<< HEAD
 --                          declare
 --                             L1 : Page_Level;
 --                             --  with Import, Address => L1_Virt;
@@ -390,6 +428,23 @@ end Init;
 --                                   Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
 --                                end if;
 --                             end loop;
+=======
+                        declare
+                           L1 : Page_Level;
+                           --  with Import, Address => L1_Virt;
+                        begin
+                           -- Walk all 512 entries in L1
+                           for k in Index_Range loop
+                              L1_Entry_Addr : Unsigned_64 := k * 64;
+                              L1_Entry : Page_Table_Entry with Address => L1_Entry_Addr'Address;
+                              if Is_Valid_Entry(L1_Entry) then
+                                 -- L1(k) references an actual page frame
+                                 Frame_Phys := Extract_Physical_Addr(L1_Entry) + Memory.Memory_Offset;
+                                 -- Free the final data page
+                                 Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
+                              end if;
+                           end loop;
+>>>>>>> 5571d86 (updated get satp functions)
 
 --                             -- Free the entire L1 table page after clearing all entries
 --                             Memory.Physical.Free(Interfaces.C.size_t(L1_Phys));
@@ -430,6 +485,7 @@ begin
 
    New_PPN := U44 (Physical_Addr / 4096);  --  >> 12
 
+<<<<<<< HEAD
    ----------------------------------------------------------------
    --  2. Read current SATP (keeps MODE and ASID intact)
    ----------------------------------------------------------------
@@ -458,6 +514,35 @@ exception
       return False;
 end Make_Active;
 
+=======
+   --  function Make_Active (Map : Page_Table_Acc) return Boolean is
+   --     Val : Unsigned_64;
+   --  begin
+   --     Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the 
+   --     if Arch.Snippets.Read_SATP /= Val then
+   --        Arch.Snippets.Write_SATP (Val);
+   --     end if;
+   --     return True;
+   --  exception
+   --     when Constraint_Error =>
+   --        return False;
+   --  end Make_Active;
+      function Make_Active (Map : Page_Table_Acc) return Boolean is
+      Val : Unsigned_64;
+   begin
+      -- what should the value of the satp register be, should be the address of the root of the first page table,
+      -- which would be the start of the memory offset?
+      --  Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the of the array of 512 bits for the first page table (1..) minus the memory offset
+      Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address));
+      if Arch.Snippets.Read_SATP /= Val then
+         Arch.Snippets.Write_SATP (Val);
+      end if;
+      return True;
+   exception
+      when Constraint_Error =>
+         return False;
+   end Make_Active;
+>>>>>>> 5571d86 (updated get satp functions)
 
    procedure Translate_Address
       (Map                : Page_Table_Acc;
