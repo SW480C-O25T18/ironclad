@@ -30,7 +30,7 @@ package body Arch.MMU is
       return Interfaces.C.size_t(Shift_Left(PPN, 12));
    end Extract_Physical_Addr;
 
-   function Extract_Satp_Data (Addr : u64) return Satp_Register is
+   function Extract_Satp_Data (Satp_Content : u64) return Satp_Register is
       Result : Satp_Register;
    begin
       -- Bits 60..63 => Sv_Type
@@ -45,6 +45,16 @@ package body Arch.MMU is
 
       return Result;
    end Extract_Satp_Data;
+
+   function Combine_Satp_Data(S : Satp_Register) return Unsigned_64 is
+      Val : Unsigned_64;
+   begin
+      Val :=   (Shift_Left (u64(S.Sv_Type), 60))
+            or (Shift_Left (u64(S.ASID), 44))
+            or (Unsigned_64(S.PPN));
+      return Val;
+   end Combine_Satp_Data;
+
 
    function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
       pragma Unreferenced (Memmap);
@@ -150,28 +160,17 @@ package body Arch.MMU is
          return;
    end Destroy_Table;
 
-
-   --  function Make_Active (Map : Page_Table_Acc) return Boolean is
-   --     Val : Unsigned_64;
-   --  begin
-   --     Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the 
-   --     if Arch.Snippets.Read_SATP /= Val then
-   --        Arch.Snippets.Write_SATP (Val);
-   --     end if;
-   --     return True;
-   --  exception
-   --     when Constraint_Error =>
-   --        return False;
-   --  end Make_Active;
-      function Make_Active (Map : Page_Table_Acc) return Boolean is
-      Val : Unsigned_64;
+   function Make_Active (Map : Page_Table_Acc) return Boolean is
+      Physical_Addr : Unsigned_64;
    begin
-      -- what should the value of the satp register be, should be the address of the root of the first page table,
-      -- which would be the start of the memory offset?
-      --  Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the of the array of 512 bits for the first page table (1..) minus the memory offset
-      Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address));
-      if Arch.Snippets.Read_SATP /= Val then
-         Arch.Snippets.Write_SATP (Val);
+      Physical_Addr := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory.Memory_Offset);
+      Satp_Content := Arch.Snippets.Read_SATP;
+      
+      New_PPN := U44(Physical_Addr / 4096);
+      if Satp_Content.PPN /= New_PPN then
+         Satp_Content.PPN := New_PPN;
+         New_SATP := Combine_Satp_Data (Satp_Content);
+         Arch.Snippets.Write_SATP (New_SATP);
       end if;
       return True;
    exception

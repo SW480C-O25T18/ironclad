@@ -289,6 +289,7 @@ private
 
       function Extract_Satp_Data: (Addr : u64) return Satp_Register;
       function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address;
+      function Combine_Satp_Data(S : Satp_Register) return Unsigned_64;
 
    #end if;
 
