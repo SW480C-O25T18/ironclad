@@ -49,6 +49,8 @@ package Arch.Snippets is
    #if ArchName = """riscv64-limine"""
       function Read_SStatus return Unsigned_64 with Inline;
       procedure Write_SStatus (Value : Unsigned_64) with Inline;
+      function Read_SATP return Unsigned_64 with Inline;
+      procedure Write_SATP (Value : Unsigned_64) with Inline;
    #elsif ArchName = """x86_64-limine"""
       procedure Port_Out (Port : Unsigned_16; Value : Unsigned_8) with Inline;
       function Port_In (Port : Unsigned_16) return Unsigned_8 with Inline;
