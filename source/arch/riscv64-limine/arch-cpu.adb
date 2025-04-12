@@ -138,4 +138,19 @@ package body Arch.CPU with SPARK_Mode => Off is
          Inputs   => Unsigned_64'Asm_Input("r", trap_entry'Address),
          Volatile => True);
    end Set_Trap_Vector;
+
+   ----------------------------------------------------------------------------
+   --  Read the hart ID of the current core. The hart ID is used to identify
+   --  the core in the system.
+   ----------------------------------------------------------------------------
+   function Read_Hart_ID return Unsigned_64 is
+      ID : Unsigned_64;
+   begin
+      -- Read the mhartid CSR to obtain the current hart (core) ID.
+      Asm ("csrr %0, mhartid",
+         Outputs  => Unsigned_64'Asm_Output ("=r", ID),
+         Clobber  => "memory",
+         Volatile => True);
+      return ID;
+   end Read_Hart_ID;
 end Arch.CPU;
