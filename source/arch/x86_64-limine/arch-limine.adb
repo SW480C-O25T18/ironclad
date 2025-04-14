@@ -41,7 +41,6 @@ package body Arch.Limine with SPARK_Mode => Off is
       Vers_Addr : constant System.Address := InfoPonse.Version_Addr;
       Vers_Len  : constant        Natural := Lib.C_String_Length (Vers_Addr);
       Boot_Vers : String (1 .. Vers_Len) with Import, Address => Vers_Addr;
-
       MemPonse : Memmap_Response
          with Import, Address => Memmap_Request.Response;
       Inner_MMap : constant Memmap_Entry_Arr (1 .. MemPonse.Count)
@@ -51,6 +50,7 @@ package body Arch.Limine with SPARK_Mode => Off is
       Lib.Messages.Put_Line ("Booted by " & Boot_Name & " " & Boot_Vers);
 
       if Base_Request.Revision /= 0 then
+      -- if true then
          Lib.Messages.Put_Line ("The passed revision was not supported!");
       end if;
 
@@ -66,6 +66,7 @@ package body Arch.Limine with SPARK_Mode => Off is
          Global_Info.Cmdline (1 .. Cmdline_Len) := Cmdline;
          Global_Info.Cmdline_Len := Cmdline_Len;
       end;
+
 
       --  Translate RAM files.
       Global_Info.RAM_Files_Len := 0;
@@ -84,6 +85,8 @@ package body Arch.Limine with SPARK_Mode => Off is
             end loop;
          end;
       end if;
+
+      loop null; end loop;
 
       --  Translate memmap.
       for Ent of Inner_MMap loop
@@ -110,6 +113,7 @@ package body Arch.Limine with SPARK_Mode => Off is
              Length  => Storage_Count (Ent.Length),
              MemType => Type_Entry);
       end loop;
+
    exception
       when Constraint_Error =>
          Lib.Messages.Put_Line ("Exception encountered translating limine");

@@ -146,4 +146,46 @@ package body Devices.UART with SPARK_Mode => Off is
          Write_UART0 (C);
       end loop;
    end Write_UART0;
+
+      -- Add a constant for the LSR Data Ready bit.
+   DATA_Ready_Bit : constant Unsigned_8 := 1;  -- Bit 0: Data available for reading
+
+   -- Wait until the receiver has valid data.
+   procedure Wait_For_Data_Ready is
+   begin
+      while (Read_Register(LSR_Offset).Value and DATA_Ready_Bit) = 0 loop
+         null;
+      end loop;
+   end Wait_For_Data_Ready;
+
+   -- Read a single character from UART0.
+   function Read_UART0 return Character is
+      RecByte : Byte_Register_Rec;
+   begin
+      -- Wait until at least one character has been received.
+      Wait_For_Data_Ready;
+      -- Read the received byte (using the same register address as RBR_Offset).
+      RecByte := Read_Register(RBR_Offset);
+      -- Convert the numeric value to a Character.
+      return Character'Val(Integer(RecByte.Value));
+   end Read_UART0;
+
+   -- Read characters into a string until a newline (LF or CR) is encountered.
+   procedure Read_UART0_Line (Line : out String) is
+      Buffer : String (1 .. 100);
+      Last   : Natural := 0;
+      Ch     : Character;
+   begin
+      loop
+         Ch := Read_UART0;
+         Last := Last + 1;
+         Buffer(Last) := Ch;
+         exit when Last = 10;
+      end loop;
+      Line := Buffer(1 .. Last);
+   end Read_UART0_Line;
+
+
+
+
 end Devices.UART;

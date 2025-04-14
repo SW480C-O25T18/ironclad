@@ -199,8 +199,10 @@ begin
              User       => 0,
              Want_Read  => True,
              Want_Write => False);
-
-         if Success = VFS.FS_Success then
+         Lib.Messages.Put_Line("This is where we are!!!");
+         -- if Success = VFS.FS_Success then
+         if true then
+            Lib.Messages.Put_Line("Boom success!!!");
             Userland.Loader.Start_Program
                (Init_Args.all (1).all, Init_FS, Init_Ino, Init_Args.all,
                 Init_Env, Init_Stdin, Init_Stdout, Init_Stdout, Init_PID);
@@ -229,6 +231,7 @@ begin
       end if;
    end;
 
+   Lib.Messages.Put_Line("Idle Sunglasses");
    --  Going idle into the scheduler.
    Scheduler.Idle_Core;
 exception
