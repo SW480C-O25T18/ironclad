@@ -62,8 +62,8 @@ package body Arch.Entrypoint is
       -- Declare local variables for DTB nodes and properties without initializing them here.
       CLINT_Node : DTB_Node_Access;
       PLIC_Node  : DTB_Node_Access;
-      CLINT_Reg  : Unsigned_64_Array;
-      PLIC_Reg   : Unsigned_64_Array;
+      --CLINT_Reg  : Unsigned_64_Array;
+      --PLIC_Reg   : Unsigned_64_Array;
    begin
       -- Initialize basic hardware state.
       Devices.UART.Init_UART0;
@@ -140,19 +140,23 @@ package body Arch.Entrypoint is
       -- The CLINT_Node is configured with the "reg" property.
       -- The "reg" property is expected to contain the base address and offsets for MSIP, MTime, and MTimecmp.
       if CLINT_Node /= null then
-         CLINT_Reg := Arch.DTB.Get_Property_Unsigned_64(CLINT_Node, "reg");
-         if CLINT_Reg'Length >= 4 then
-            Arch.CLINT.Set_CLINT_Configuration(
-               Base_Address    => To_Address(CLINT_Reg(1)),
-               MSIP_Offset     => CLINT_Reg(2),
-               MTime_Offset    => CLINT_Reg(3),
-               MTimecmp_Offset => CLINT_Reg(4),
-               Enabled         => True);
-            Arch.Debug.Print("CLINT configured from DTB.");
-         else
-            Arch.Debug.Print("CLINT DTB information incomplete; using defaults.");
-            Arch.CLINT.Set_CLINT_Configuration;
-         end if;
+         declare
+            CLINT_Reg : Unsigned_64_Array :=
+            Arch.DTB.Get_Property_Unsigned_64 (CLINT_Node, "reg");
+         begin
+            if CLINT_Reg'Length >= 4 then
+               Arch.CLINT.Set_CLINT_Configuration(
+                  Base_Address    => To_Address(CLINT_Reg(1)),
+                  MSIP_Offset     => CLINT_Reg(2),
+                  MTime_Offset    => CLINT_Reg(3),
+                  MTimecmp_Offset => CLINT_Reg(4),
+                  Enabled         => True);
+               Arch.Debug.Print("CLINT configured from DTB.");
+            else
+               Arch.Debug.Print("CLINT DTB information incomplete; using defaults.");
+               Arch.CLINT.Set_CLINT_Configuration;
+            end if;
+         end;
       else
          Arch.Debug.Print("CLINT node not found in DTB; using defaults.");
          Arch.CLINT.Set_CLINT_Configuration;
@@ -173,23 +177,28 @@ package body Arch.Entrypoint is
       end if;
       -- The PLIC_Node is configured with the "reg" property.
       if PLIC_Node /= null then
-         PLIC_Reg := Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
-         if PLIC_Reg'Length >= 2 then
-            Arch.PLIC.Set_PLIC_Configuration(
-               Base_Address         => To_Address(PLIC_Reg(1)),
-               Priority_Offset      => 0,  -- Assume priority registers start at offset 0
-               Context_Base_Offset  => PLIC_Reg(2),
-               Context_Stride       => 16#1000#,  -- Default stride (adjust if DTB provides a value)
-               Threshold_Offset     => 0,
-               Max_Interrupt_ID     => 1023,
-               Max_Harts            => Num_Harts,  -- Use the number of harts from SMP
-               Contexts_Per_Hart    => 1,          -- Default; adjust if needed
-               Enabled              => True);
-            Arch.Debug.Print("PLIC configured from DTB and SMP response.");
-         else
-            Arch.Debug.Print("PLIC DTB information incomplete; using defaults.");
-            Arch.PLIC.Set_PLIC_Configuration;
-         end if;
+         declare
+            PLIC_Reg : Unsigned_64_Array :=
+            Arch.DTB.Get_Property_Unsigned_64(PLIC_Node, "reg");
+         begin
+            Arch.Debug.Print("PLIC_Reg: Starting to parse PLIC node");
+            if PLIC_Reg'Length >= 2 then
+               Arch.PLIC.Set_PLIC_Configuration(
+                  Base_Address         => To_Address(PLIC_Reg(1)),
+                  Priority_Offset      => 0,  -- Assume priority registers start at offset 0
+                  Context_Base_Offset  => PLIC_Reg(2),
+                  Context_Stride       => 16#1000#,  -- Default stride (adjust if DTB provides a value)
+                  Threshold_Offset     => 0,
+                  Max_Interrupt_ID     => 1023,
+                  Max_Harts            => Num_Harts,  -- Use the number of harts from SMP
+                  Contexts_Per_Hart    => 1,          -- Default; adjust if needed
+                  Enabled              => True);
+               Arch.Debug.Print("PLIC configured from DTB and SMP response.");
+            else
+               Arch.Debug.Print("PLIC DTB information incomplete; using defaults.");
+               Arch.PLIC.Set_PLIC_Configuration;
+            end if;
+         end;
       else
          Arch.Debug.Print("PLIC node not found in DTB; using defaults.");
          Arch.PLIC.Set_PLIC_Configuration;

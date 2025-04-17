@@ -26,6 +26,7 @@ with Devices.Ramdev;
 with Arch.Limine;
 with Ada.Unchecked_Conversion;   -- for Address_To_Unsigned_64
 with System;                     -- for System.Address
+with System.Machine_Code;
 
 package body Arch.Hooks is
 
@@ -33,6 +34,9 @@ package body Arch.Hooks is
    -- This helper function converts an address to an Unsigned_64 type. 
    -----------------------------------------------------------------------
    function Address_To_Unsigned_64 is new Ada.Unchecked_Conversion (System.Address, Unsigned_64);
+
+   function Read_TP return Unsigned_64;
+   function Write_TP (Value : Unsigned_64) return Boolean;
 
    function Devices_Hook return Boolean is
    begin
@@ -45,7 +49,8 @@ package body Arch.Hooks is
       Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
       -- For read operations, treat Arg as a pointer to Unsigned_64. 
       type U64_Ptr is access all Unsigned_64;
-      Ptr : U64_Ptr := U64_Ptr (Arg);
+      function Addr_To_U64_Ptr is new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
+      Ptr : U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin 
       Debug.Print ("PRCTL_Hook: Code = " & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is 

@@ -94,37 +94,48 @@ package body Devices.UART with SPARK_Mode => Off is
 
 
 
-   procedure Init_UART0 is
-      Divisor_Low  : constant Unsigned_8 := 2; 
-      Divisor_High : constant Unsigned_8 := 0; 
+   function Init_UART0 return Boolean is
+   Divisor_Low  : constant Unsigned_8 := 2; 
+   Divisor_High : constant Unsigned_8 := 0; 
+begin
+   -- 1. Disable all UART interrupts
+   Write_Register (IER_Offset, (Value => 0));
+
+   -- 2. Enable DLAB to set the baud rate divisor
+   Write_Register (LCR_Offset, (Value => LCR_DLAB_Bit));
+
+   -- 3. Write divisor (DLL, then DLM)
+   Write_Register (THR_Offset, (Value => Divisor_Low));   -- DLL
+   Write_Register (IER_Offset, (Value => Divisor_High));  -- DLM
+
+   -- 4. Clear DLAB, set 8N1
+   Write_Register (LCR_Offset, (Value => LCR_8N1));
+
+   -- 5. Enable FIFO, clear TX/RX FIFOs
+   Write_Register
+     (FCR_Offset,
+      (Value => FCR_Enable_FIFO
+              or FCR_Clear_Rx_FIFO
+              or FCR_Clear_Tx_FIFO));
+
+   -- 6. Set Modem Control (DTR, RTS set)
+   Write_Register (MCR_Offset, (Value => MCR_DTR or MCR_RTS));
+
+   -- (Optional) Read LSR to clear any existing status
+   declare
+      Dummy : Byte_Register_Rec := Read_Register (LSR_Offset);
    begin
-      -- 1. Disable all UART interrupts
-      Write_Register(IER_Offset, (Value => 0));
+      null;
+   end;
 
-      -- 2. Enable DLAB to set the baud rate divisor
-      Write_Register(LCR_Offset, (Value => LCR_DLAB_Bit));
+   return True;   -- success
 
-      -- 3. Write divisor (DLL, then DLM)
-      Write_Register(THR_Offset, (Value => Divisor_Low));   -- DLL
-      Write_Register(IER_Offset, (Value => Divisor_High));  -- DLM
-
-      -- 4. Clear DLAB, set 8N1
-      Write_Register(LCR_Offset, (Value => LCR_8N1));
-
-      -- 5. Enable FIFO, clear TX/RX FIFOs
-      Write_Register(FCR_Offset,
-                     (Value => FCR_Enable_FIFO or FCR_Clear_Rx_FIFO or FCR_Clear_Tx_FIFO));
-
-      -- 6. Set Modem Control (DTR, RTS set)
-      Write_Register(MCR_Offset, (Value => MCR_DTR or MCR_RTS));
-
-      -- (Optional) Read LSR to clear any existing status
-      declare
-         Dummy : Byte_Register_Rec := Read_Register(LSR_Offset);
-      begin
-         null;
-      end;
-   end Init_UART0;
+exception
+   when others =>
+      -- you can log the exception if you like:
+         Arch.Debug.Print ("UART init failed: " & Exception_Message (others));
+      return False;  -- failure
+end Init_UART0;
 
    procedure Wait_For_THR_Empty is
    begin
