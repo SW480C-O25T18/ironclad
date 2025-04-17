@@ -46,6 +46,8 @@ package body Arch.PCI is
        Result       : out PCI_Device;
        Success      : out Boolean)
    is
+      pragma Unreferenced (Device_Class, Subclass, Prog_If, Idx, Result);
+      pragma Unreferenced (Success);
    begin
       Success := False;
    end Search_Device;
@@ -57,11 +59,13 @@ package body Arch.PCI is
        Result  : out PCI_Device;
        Success : out Boolean)
    is
+      pragma Unreferenced (Bus, Slot, Func, Result);
    begin
       Success := False;
    end Search_Device;
    ----------------------------------------------------------------------------
    procedure Enable_Bus_Mastering (Dev : PCI_Device) is
+      pragma Unreferenced (Dev);
    begin
       null;
    end Enable_Bus_Mastering;
@@ -72,6 +76,8 @@ package body Arch.PCI is
        BAR     : out Base_Address_Register;
        Success : out Boolean)
    is
+      pragma Unreferenced (Dev, Index, BAR);
+      pragma Unreferenced (Success);
    begin
       Success := False;
    end Get_BAR;
@@ -80,42 +86,75 @@ package body Arch.PCI is
       (Dev               : PCI_Device;
        Has_MSI, Has_MSIX : out Boolean)
    is
+      pragma Unreferenced (Dev);
+      pragma Unreferenced (Has_MSI, Has_MSIX);
    begin
       Has_MSI  := False;
       Has_MSIX := False;
    end Get_MSI_Support;
 
    procedure Set_MSI_Vector (Dev : PCI_Device; Vector : Unsigned_8) is
+      pragma Unreferenced (Dev, Vector);
    begin
       null;
    end Set_MSI_Vector;
    ----------------------------------------------------------------------------
    function Read8 (Dev : PCI_Device; Off : Unsigned_16) return Unsigned_8 is
+      pragma Unreferenced (Dev, Off);
+      -- This function is not implemented in this version.
+      -- It should read a byte from the PCI device at the specified offset.
+      -- For now, we return 0 to indicate that the read operation was not
+      -- successful.
    begin
       return 0;
    end Read8;
 
    function Read16 (Dev : PCI_Device; Off : Unsigned_16) return Unsigned_16 is
+      pragma Unreferenced (Dev, Off);
+      -- This function is not implemented in this version.
+      -- It should read a word from the PCI device at the specified offset.
+      -- For now, we return 0 to indicate that the read operation was not
+      -- successful.
    begin
       return 0;
    end Read16;
 
    function Read32 (Dev : PCI_Device; Off : Unsigned_16) return Unsigned_32 is
+      pragma Unreferenced (Dev, Off);
+      -- This function is not implemented in this version.
+      -- It should read a double word from the PCI device at the specified offset.
+      -- For now, we return 0 to indicate that the read operation was not
+      -- successful.
    begin
       return 0;
    end Read32;
 
    procedure Write8 (Dev : PCI_Device; Off : Unsigned_16; D : Unsigned_8) is
+      pragma Unreferenced (Dev, Off, D);
+      -- This procedure is not implemented in this version.
+      -- It should write a byte to the PCI device at the specified offset.
+      -- For now, we do nothing to indicate that the write operation was not
+      -- successful.
    begin
       null;
    end Write8;
 
    procedure Write16 (Dev : PCI_Device; Off : Unsigned_16; D : Unsigned_16) is
+      pragma Unreferenced (Dev, Off, D);
+      -- This procedure is not implemented in this version.
+      -- It should write a word to the PCI device at the specified offset.
+      -- For now, we do nothing to indicate that the write operation was not
+      -- successful.
    begin
       null;
    end Write16;
 
    procedure Write32 (Dev : PCI_Device; Off : Unsigned_16; D : Unsigned_32) is
+      pragma Unreferenced (Dev, Off, D);
+      -- This procedure is not implemented in this version.
+      -- It should write a double word to the PCI device at the specified offset.
+      -- For now, we do nothing to indicate that the write operation was not
+      -- successful.
    begin
       null;
    end Write32;

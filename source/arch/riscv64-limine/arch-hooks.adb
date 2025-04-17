@@ -24,6 +24,8 @@ with Interfaces; use Interfaces;
 with Lib.Messages;
 with Devices.Ramdev;
 with Arch.Limine;
+with Ada.Unchecked_Conversion;   -- for Address_To_Unsigned_64
+with System;                     -- for System.Address
 
 package body Arch.Hooks is
 
@@ -40,9 +42,10 @@ package body Arch.Hooks is
 
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
       -- Convert Arg to an Unsigned_64 for write operations. 
-      Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64(Arg); 
+      Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
       -- For read operations, treat Arg as a pointer to Unsigned_64. 
-      Ptr : access Unsigned_64 := Arg; 
+      type U64_Ptr is access all Unsigned_64;
+      Ptr : U64_Ptr := U64_Ptr (Arg);
    begin 
       Debug.Print ("PRCTL_Hook: Code = " & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is 
@@ -124,10 +127,9 @@ package body Arch.Hooks is
    procedure Register_RAM_Files is
    begin
    Debug.Print ("Register_RAM_Files: Registering RAM files");
-      if not Devices.Ramdev.Init
-         (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len), 
-         Debug.Print("Register_RAM_Files: RAM files loaded"))
-      then
+      if Devices.Ramdev.Init (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len)) then
+         Debug.Print ("Register_RAM_Files: RAM files loaded");
+      else
          Lib.Messages.Put_Line ("Register_RAM_Files: Could not load RAM files");
       end if;
    exception

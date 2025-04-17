@@ -14,7 +14,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.
 
-with System;
+with System; use System;
 with Interfaces; use Interfaces;
 
 package Arch.CLINT with SPARK_Mode => Off is

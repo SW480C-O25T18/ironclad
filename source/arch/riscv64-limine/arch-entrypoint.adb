@@ -27,6 +27,9 @@ with Arch.CPU;
 with Main;
 with Arch.Interrupts;
 with Arch.Local;
+with Arch.DTB; use Arch.DTB;
+with Arch.CLINT;
+with Arch.PLIC;
 
 --  #if KASAN
 --     with Lib.KASAN;
@@ -53,7 +56,6 @@ package body Arch.Entrypoint is
    -- This procedure is called as soon as control is transferred from the bootloader.
    ------------------------------------------------------------------------------
    procedure Bootstrap_Main is
-      type Unsigned_64_Array is array (Natural range <>) of Unsigned_64;
       Info      : Boot_Information renames Limine.Global_Info;
       Addr      : System.Address;
       Num_Harts : Unsigned_64;
