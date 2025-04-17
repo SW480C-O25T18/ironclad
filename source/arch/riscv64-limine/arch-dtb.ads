@@ -23,6 +23,8 @@ package Arch.DTB with SPARK_Mode => Off is
    Max_DTB_Properties   : constant := 32;
    Max_DTB_Children     : constant := 64;
 
+   type Unsigned_64_Array is array (Positive range <>) of Unsigned_64;
+
    type DTB_Property_Access is access all Interfaces.Unsigned_32;
    type DTB_Property_Access_Array is array (0 .. Max_DTB_Properties - 1)
      of DTB_Property_Access;
