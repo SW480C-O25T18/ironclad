@@ -78,17 +78,17 @@ package Arch.Interrupts with SPARK_Mode => Off is
    end record
    with Pack;
 
-   pragma Assert (x1_ra'Position       = 0);
-   pragma Assert (x4_tp'Position       = 8);
-   pragma Assert (x5_t0'Position       = 16);
-   pragma Assert (x17_a7'Position      = 96);
-   pragma Assert (x31_t6'Position      = 128);
-   pragma Assert (x3_gp'Position       = 144);
-   pragma Assert (x27_s11'Position     = 240);
-   pragma Assert (sepc'Position        = 248);
-   pragma Assert (scause'Position      = 256);
-   pragma Assert (sstatus'Position     = 272);
-   pragma Assert (FP_Context_Ptr'Position = 280);
+   pragma Assert (Frame.x1_ra'Position       = 0);
+   pragma Assert (Frame.x4_tp'Position       = 8);
+   pragma Assert (Frame.x5_t0'Position       = 16);
+   pragma Assert (Frame.x17_a7'Position      = 96);
+   pragma Assert (Frame.x31_t6'Position      = 128);
+   pragma Assert (Frame.x3_gp'Position       = 144);
+   pragma Assert (Frame.x27_s11'Position     = 240);
+   pragma Assert (Frame.sepc'Position        = 248);
+   pragma Assert (Frame.scause'Position      = 256);
+   pragma Assert (Frame.sstatus'Position     = 272);
+   pragma Assert (Frame.FP_Context_Ptr'Position = 280);
 
    ---------------------------------------------------------------------------
    -- Initialization
@@ -109,7 +109,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    -- Device IRQ Registration
    ---------------------------------------------------------------------------
 
-   procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node; Handler : IRQ_Handler);
+   procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node_Access; Handler : IRQ_Handler);
 
    ---------------------------------------------------------------------------
    -- Floating-Point Context Management

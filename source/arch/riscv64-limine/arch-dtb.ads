@@ -18,13 +18,12 @@ with Interfaces; use Interfaces;
 with Arch.Limine;
 
 package Arch.DTB with SPARK_Mode => Off is
+   
+   Max_Name_Length      : constant := 64;
+   Max_DTB_Properties   : constant := 32;
+   Max_DTB_Children     : constant := 64;
 
--- some reasonable upper limits for your kernel:
-   Max_Name_Length      : constant := 32;
-   Max_DTB_Properties   : constant := 16;
-   Max_DTB_Children     : constant := 8;
-
-   type DTB_Property_Access is access all Interfaces.Unsigned_32;  -- or whatever
+   type DTB_Property_Access is access all Interfaces.Unsigned_32;
    type DTB_Property_Access_Array is array (0 .. Max_DTB_Properties - 1)
      of DTB_Property_Access;
 
@@ -44,7 +43,7 @@ package Arch.DTB with SPARK_Mode => Off is
       Children    : DTB_Node_Access_Array;
       Child_Count : Natural := 0;
    end record;
-   
+
    function Init return Boolean;
    procedure Print_DTB_Node (Node   : DTB_Node_Access;
       Indent : String := "");
