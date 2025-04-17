@@ -71,9 +71,48 @@ package body Arch.Hooks is
    end PRCTL_Hook;
 
    procedure Panic_SMP_Hook is
+      -- Obtain the ID of the current hart by reading the mhartid CSR.
+      Current_Hart : constant Unsigned_64 := CPU.Read_Hart_ID;
+      -- Use the global core count from Arch.CPU as the total number of active harts.
+      Hart_Count   : constant Positive    := Arch.CPU.Core_Count;
    begin
-      null;
-      Lib.Messages.Put_Line ("Panic_SMP_Hook: Panic: System Halted");
+      ------------------------------------------------------------------------------
+      -- Disable interrupts on the current core.
+      -- This prevents further interrupts during the panic sequence.
+      ------------------------------------------------------------------------------
+      Arch.Snippets.Disable_Interrupts;
+
+      ------------------------------------------------------------------------------
+      -- Signal all other harts to enter panic state by sending a software interrupt.
+      -- We iterate over all cores (from 0 to Hart_Count - 1), and for each core 
+      -- other than the current one, we trigger a software interrupt using the CLINT.
+      ------------------------------------------------------------------------------
+      for H in 0 .. Hart_Count - 1 loop
+         if Unsigned_64(H) /= Current_Hart then
+            Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
+            Debug.Print("Panic_SMP_Hook: Sent software interrupt to hart " &
+                        Unsigned_64'Image(Unsigned_64(H)));
+         else
+            Debug.Print("Panic_SMP_Hook: Skipping current hart " &
+                        Unsigned_64'Image(Current_Hart));
+         end if;
+      end loop;
+
+      ------------------------------------------------------------------------------
+      -- Print a system-wide panic message.
+      ------------------------------------------------------------------------------
+      Lib.Messages.Put_Line("Panic_SMP_Hook: Panic: System Halted");
+
+      ------------------------------------------------------------------------------
+      -- Halt the current hart (this core halts last).
+      -- Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current 
+      -- core into an unrecoverable halt state.
+      ------------------------------------------------------------------------------
+      Arch.Snippets.HCF;
+   exception
+      when Constraint_Error =>
+         Debug.Print("Panic_SMP_Hook: Constraint_Error encountered");
+         null;
    end Panic_SMP_Hook;
 
    function Get_Active_Core_Count return Positive is

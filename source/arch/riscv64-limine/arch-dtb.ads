@@ -18,6 +18,32 @@ with Interfaces; use Interfaces;
 with Arch.Limine;
 
 package Arch.DTB with SPARK_Mode => Off is
+   
+   Max_Name_Length      : constant := 64;
+   Max_DTB_Properties   : constant := 32;
+   Max_DTB_Children     : constant := 64;
+
+   type DTB_Property_Access is access all Interfaces.Unsigned_32;
+   type DTB_Property_Access_Array is array (0 .. Max_DTB_Properties - 1)
+     of DTB_Property_Access;
+
+   type DTB_Node;
+   type DTB_Node_Access is access all DTB_Node;
+   type DTB_Node_Access_Array is array (0 .. Max_DTB_Children - 1)
+     of DTB_Node_Access;
+
+   type Name_String is array (Positive range <>) of Character;
+   pragma Convention (C, Name_String);
+
+   type DTB_Node is record
+      Name        : String (1 .. Max_Name_Length);
+      Name_Len    : Natural := 0;
+      Properties  : DTB_Property_Access_Array;
+      Prop_Count  : Natural := 0;
+      Children    : DTB_Node_Access_Array;
+      Child_Count : Natural := 0;
+   end record;
+
    function Init return Boolean;
    procedure Print_DTB_Node (Node   : DTB_Node_Access;
       Indent : String := "");

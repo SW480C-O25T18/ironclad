@@ -48,6 +48,9 @@ package Arch.CPU is
 
    --  Init the cores and BSP.
    procedure Init_Cores;
+   -- Read the core hart ID of the current core.
+   function Read_Hart_ID return Unsigned_64;
+   -- Set the trap vector register to the global trap vector entrty point.
    procedure Set_Trap_Vector;
 
 private
