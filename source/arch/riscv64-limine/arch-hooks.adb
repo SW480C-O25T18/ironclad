@@ -26,7 +26,7 @@ with Devices.Ramdev;
 with Arch.Limine;
 with Ada.Unchecked_Conversion;   -- for Address_To_Unsigned_64
 with System;                     -- for System.Address
-with System.Machine_Code;
+with System.Machine_Code; use System.Machine_Code;
 
 package body Arch.Hooks is
 
