@@ -77,7 +77,7 @@ package body Arch.PLIC is
          Priority_Offset := Priority_Offset;
          Context_Base := Context_Base_Offset;
          Context_Stride := Context_Stride;
-         Threshold_Offset : Threshold_Offset;
+         Threshold_Offset := Threshold_Offset;
          Max_Interrupt_ID := Max_Interrupt_ID;
          Max_Harts := Max_Harts;
          Contexts_Per_Hart := Contexts_Per_Hart;
@@ -262,7 +262,7 @@ package body Arch.PLIC is
    ------------------------------------------------------------------------------
    -- Check if PLIC is enabled. If not, print a debug message and return False.
    ------------------------------------------------------------------------------
-   procedure Check_PLIC_Supported return Boolean is
+   function Check_PLIC_Supported return Boolean is
    begin
       if not Is_Enabled then
          Arch.Debug.Print("PLIC not supported on this platform.");

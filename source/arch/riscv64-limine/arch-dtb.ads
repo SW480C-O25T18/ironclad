@@ -23,6 +23,8 @@ package Arch.DTB with SPARK_Mode => Off is
    Max_DTB_Properties   : constant := 32;
    Max_DTB_Children     : constant := 64;
 
+   type Unsigned_64_Array is array (Positive range <>) of Unsigned_64;
+
    type DTB_Property_Access is access all Interfaces.Unsigned_32;
    type DTB_Property_Access_Array is array (0 .. Max_DTB_Properties - 1)
      of DTB_Property_Access;
@@ -46,7 +48,14 @@ package Arch.DTB with SPARK_Mode => Off is
 
    function Init return Boolean;
    procedure Print_DTB_Node (Node   : DTB_Node_Access;
-      Indent : String := "");
+      Indent : String := ""); 
+
+   function Get_Property_Unsigned_64
+      (Node : DTB_Node_Access; Name : String)
+      return Unsigned_64_Array;
+
+   function Find_Node_By_Compatible
+      (Compat : String) return DTB_Node_Access;
 
 private
 
@@ -57,7 +66,7 @@ private
       with Export, Async_Writers;
 
    --  It is DOODFEED, but that is big endian, this is little endian.
-   FDT_Magic : constant := 16#EDFE0DD0#;
+   FDT_Magic : constant Unsigned_32 := 16#EDFE0DD0#;
 
    type FDT_Header is record
       Magic                : Unsigned_32;
@@ -68,7 +77,7 @@ private
       Version              : Unsigned_32;
       Last_Compatible_Vers : Unsigned_32;
       Boot_CPU_Physical_ID : Unsigned_32;
-      Size_DT_Stings       : Unsigned_32;
+      Size_DT_Strings       : Unsigned_32;
       Size_DT_Struct       : Unsigned_32;
    end record with Pack;
 end Arch.DTB;
