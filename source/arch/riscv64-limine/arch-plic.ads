@@ -1,5 +1,6 @@
---  arch-exceptions.ads: Specification of Platform-Level Interrupt Controller (PLIC) utilities.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  arch-plic.ads: Specification of Platform-Level
+--  Interrupt Controller (PLIC) utilities.
+--  Copyright (C) 2025 scweeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -12,7 +13,7 @@
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with System;
 with Interfaces; use Interfaces;
@@ -34,12 +35,12 @@ package Arch.PLIC with SPARK_Mode => Off is
    --
    --  Ada contracts (Pre/Post conditions) are used to enforce interface expectations.
    ------------------------------------------------------------------------------
-   
+
    -- Set dynamic configuration. All parameters (except those defined by the ISA)
    -- come from the DTB (or a higher-level configuration module). The parameter
    -- Enabled indicates if the PLIC is supported on this platform.
    procedure Set_PLIC_Configuration (
-      Base_Address         : System.Address := System.Storage_Elements.To_Address(16#0C000000#);
+      Base_Address         : System.Address := System.Storage_Elements.To_Address (16#0C000000#);
       Priority_Offset      : Unsigned_64   := 0;
       Context_Base_Offset  : Unsigned_64   := 16#200000#;
       Context_Stride       : Unsigned_64   := 16#1000#;
@@ -105,7 +106,7 @@ package Arch.PLIC with SPARK_Mode => Off is
                                      Priority     : Unsigned_64)
       with Inline,
          Pre  => Interrupt_ID <= Get_Max_Interrupt_ID,
-         Post => Get_Interrupt_Priority(Interrupt_ID) = Priority;
+         Post => Get_Interrupt_Priority (Interrupt_ID) = Priority;
 
    function Get_Interrupt_Priority (Interrupt_ID : Unsigned_64) return Unsigned_64
       with Inline,
@@ -118,16 +119,16 @@ package Arch.PLIC with SPARK_Mode => Off is
    procedure Set_Threshold (Hart_ID   : Unsigned_64;
                             Context_ID: Unsigned_64;
                             Threshold : Unsigned_64)
-   with Inline,
-           Pre  => Hart_ID < Get_Max_Harts,
-           Post => Get_Threshold(Hart_ID, Context_ID) = Threshold;
-   
+      with Inline,
+         Pre  => Hart_ID < Get_Max_Harts,
+         Post => Get_Threshold (Hart_ID, Context_ID) = Threshold;
+
    function Get_Threshold (Hart_ID   : Unsigned_64;
                            Context_ID: Unsigned_64) return Unsigned_64
       with Inline,
          Pre  => Hart_ID < Get_Max_Harts,
          Post => True;
-   
+
    ------------------------------------------------------------------------------
    --  Dynamic Reconfiguration for Multi-Hart Systems
    ------------------------------------------------------------------------------
