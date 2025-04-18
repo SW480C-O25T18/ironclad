@@ -94,48 +94,37 @@ package body Devices.UART with SPARK_Mode => Off is
 
 
 
-   function Init_UART0 return Boolean is
-   Divisor_Low  : constant Unsigned_8 := 2; 
-   Divisor_High : constant Unsigned_8 := 0; 
-begin
-   -- 1. Disable all UART interrupts
-   Write_Register (IER_Offset, (Value => 0));
-
-   -- 2. Enable DLAB to set the baud rate divisor
-   Write_Register (LCR_Offset, (Value => LCR_DLAB_Bit));
-
-   -- 3. Write divisor (DLL, then DLM)
-   Write_Register (THR_Offset, (Value => Divisor_Low));   -- DLL
-   Write_Register (IER_Offset, (Value => Divisor_High));  -- DLM
-
-   -- 4. Clear DLAB, set 8N1
-   Write_Register (LCR_Offset, (Value => LCR_8N1));
-
-   -- 5. Enable FIFO, clear TX/RX FIFOs
-   Write_Register
-     (FCR_Offset,
-      (Value => FCR_Enable_FIFO
-              or FCR_Clear_Rx_FIFO
-              or FCR_Clear_Tx_FIFO));
-
-   -- 6. Set Modem Control (DTR, RTS set)
-   Write_Register (MCR_Offset, (Value => MCR_DTR or MCR_RTS));
-
-   -- (Optional) Read LSR to clear any existing status
-   declare
-      Dummy : Byte_Register_Rec := Read_Register (LSR_Offset);
+   procedure Init_UART0 is
+      Divisor_Low  : constant Unsigned_8 := 2; 
+      Divisor_High : constant Unsigned_8 := 0; 
    begin
-      null;
-   end;
+      -- 1. Disable all UART interrupts
+      Write_Register(IER_Offset, (Value => 0));
 
-   return True;   -- success
+      -- 2. Enable DLAB to set the baud rate divisor
+      Write_Register(LCR_Offset, (Value => LCR_DLAB_Bit));
 
-exception
-   when others =>
-      -- you can log the exception if you like:
-         Arch.Debug.Print ("UART init failed: " & Exception_Message (others));
-      return False;  -- failure
-end Init_UART0;
+      -- 3. Write divisor (DLL, then DLM)
+      Write_Register(THR_Offset, (Value => Divisor_Low));   -- DLL
+      Write_Register(IER_Offset, (Value => Divisor_High));  -- DLM
+
+      -- 4. Clear DLAB, set 8N1
+      Write_Register(LCR_Offset, (Value => LCR_8N1));
+
+      -- 5. Enable FIFO, clear TX/RX FIFOs
+      Write_Register(FCR_Offset,
+                     (Value => FCR_Enable_FIFO or FCR_Clear_Rx_FIFO or FCR_Clear_Tx_FIFO));
+
+      -- 6. Set Modem Control (DTR, RTS set)
+      Write_Register(MCR_Offset, (Value => MCR_DTR or MCR_RTS));
+
+      -- (Optional) Read LSR to clear any existing status
+      declare
+         Dummy : Byte_Register_Rec := Read_Register(LSR_Offset);
+      begin
+         null;
+      end;
+   end Init_UART0;
 
    procedure Wait_For_THR_Empty is
    begin
@@ -157,4 +146,46 @@ end Init_UART0;
          Write_UART0 (C);
       end loop;
    end Write_UART0;
+
+      -- Add a constant for the LSR Data Ready bit.
+   DATA_Ready_Bit : constant Unsigned_8 := 1;  -- Bit 0: Data available for reading
+
+   -- Wait until the receiver has valid data.
+   procedure Wait_For_Data_Ready is
+   begin
+      while (Read_Register(LSR_Offset).Value and DATA_Ready_Bit) = 0 loop
+         null;
+      end loop;
+   end Wait_For_Data_Ready;
+
+   -- Read a single character from UART0.
+   function Read_UART0 return Character is
+      RecByte : Byte_Register_Rec;
+   begin
+      -- Wait until at least one character has been received.
+      Wait_For_Data_Ready;
+      -- Read the received byte (using the same register address as RBR_Offset).
+      RecByte := Read_Register(RBR_Offset);
+      -- Convert the numeric value to a Character.
+      return Character'Val(Integer(RecByte.Value));
+   end Read_UART0;
+
+   -- Read characters into a string until a newline (LF or CR) is encountered.
+   procedure Read_UART0_Line (Line : out String) is
+      Buffer : String (1 .. 100);
+      Last   : Natural := 0;
+      Ch     : Character;
+   begin
+      loop
+         Ch := Read_UART0;
+         Last := Last + 1;
+         Buffer(Last) := Ch;
+         exit when Last = 10;
+      end loop;
+      Line := Buffer(1 .. Last);
+   end Read_UART0_Line;
+
+
+
+
 end Devices.UART;
