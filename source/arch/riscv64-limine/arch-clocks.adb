@@ -32,7 +32,7 @@ is
    Nanos_Per_MS  : constant := 1_000_000;
    Mono_TSC_Freq : Unsigned_64 := Nanos_Per_MS * 2;
 
-   pragma Unreferenced (
+   pragma Unused (
      RT_Timestamp_Seconds,
      RT_Timestamp_Nanoseconds,
      RT_Stored_Seconds,

@@ -76,7 +76,7 @@ package body Arch.Entrypoint is
       -- Initialize the Device Tree Blob (DTB) to obtain hardware configuration.
       Arch.Debug.Print("Initializing DTB discovery");
       if not Arch.DTB.Init then
-         Lib.Panic.Hard_Panic("No DTB was found!", System.Null_Address);
+         Lib.Panic.Hard_Panic("No DTB was found!");
       end if;
       Arch.Debug.Print("DTB initialized successfully");
 

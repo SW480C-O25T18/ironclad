@@ -239,8 +239,8 @@ package body Arch.PLIC is
    function Reg (Abs_Addr : System.Address) return Reg_Ptr is
    begin
       Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
-      return Reg_Ptr(Abs_Addr);
       Arch.Debug.Print("Reg: Address End");
+      return Reg_Ptr(Abs_Addr);
    end Reg;
 
    ------------------------------------------------------------------------------
