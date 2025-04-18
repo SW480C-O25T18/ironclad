@@ -50,65 +50,65 @@ package body Arch.Entrypoint is
    begin
       -- UART0 init
       if not Devices.UART.Init_UART0 then
-         Debug.Print("Devices.UART.Init_UART0 failed");
+         Debug.Print ( "Devices.UART.Init_UART0 failed" );
       end if;
-      Lib.Messages.Put_Line("Hello from kernel entrypoint");
+      Arch.Debug.Print ( "Hello from kernel entrypoint" );
 
       -- 1. Limine → arch
-      Arch.Debug.Print("Translating Limine protocol");
+      Arch.Debug.Print ( "Translating Limine protocol" );
       Limine.Translate_Proto;
 
       -- 2. DTB init
-      Arch.Debug.Print("Initializing DTB discovery");
+      Arch.Debug.Print ( "Initializing DTB discovery" );
       if not Arch.DTB.Init then
-         Lib.Panic.Hard_Panic("No DTB was found!");
+         Lib.Panic.Hard_Panic ( "No DTB was found!" );
       end if;
-      Arch.Debug.Print("DTB initialized successfully");
+      Arch.Debug.Print ( "DTB initialized successfully" );
 
       -- 3. Allocators & MMU
-      Debug.Print("Initializing allocators and MMU");
-      Lib.Messages.Put_Line("Initializing allocators");
+      Debug.Print ( "Initializing allocators and MMU" );
+      Arch.Debug.Print ( "Initializing allocators" );
       Memory.Physical.Init_Allocator(Info.Memmap(1 .. Info.Memmap_Len));
-      Debug.Print("Physical allocator initialized");
-      Debug.Print("Initializing MMU");
+      Debug.Print ( "Physical allocator initialized" );
+      Debug.Print ( "Initializing MMU" );
       if not Arch.MMU.Init(Info.Memmap(1 .. Info.Memmap_Len)) then
-         Lib.Panic.Hard_Panic("The VMM could not be initialized");
+         Lib.Panic.Hard_Panic ( "The VMM could not be initialized" );
       end if;
-      Debug.Print("MMU initialized");
+      Debug.Print ( "MMU initialized" );
 
       -- 4. Logging
-      Debug.Print("Enabling logging");
+      Debug.Print ( "Enabling logging" );
       Lib.Messages.Enable_Logging;
-      Debug.Print("Logging enabled");
+      Debug.Print ( "Logging enabled" );
 
       -- 5. Dump memory map
-      Lib.Messages.Put_Line("Physical memory map:");
+      Arch.Debug.Print ( "Physical memory map:" );
       for E of Info.Memmap(1 .. Info.Memmap_Len) loop
          Addr := E.Start + E.Length;
-         Lib.Messages.Put_Line(
+         Arch.Debug.Print(
            "[" & E.Start'Image & " - " & Addr'Image & "] " &
            Boot_Memory_Type'Image(E.MemType));
       end loop;
 
       -- 6. CPU cores
-      Arch.Debug.Print("Initializing CPU cores");
+      Arch.Debug.Print ( "Initializing CPU cores" );
       Arch.CPU.Init_Cores;
       Num_Harts := Unsigned_64(Arch.CPU.Core_Count);
       Arch.Debug.Print(
         "CPU cores initialized: " & Unsigned_64'Image(Num_Harts));
 
       -- 7. CLINT config
-      Arch.Debug.Print("Search for CLINT node in DTB");
-      CLINT_Node := Find_Node_By_Compatible("riscv,clint");
+      Arch.Debug.Print ( "Search for CLINT node in DTB" );
+      CLINT_Node := Find_Node_By_Compatible ( "riscv,clint" );
       if CLINT_Node = null then
-         CLINT_Node := Find_Node_By_Compatible("riscv,interrupt-controller");
-         Arch.Debug.Print("CLINT_Node (fallback): " & CLINT_Node'Image);
+         CLINT_Node := Find_Node_By_Compatible ( "riscv,interrupt-controller" );
+         Arch.Debug.Print ( "CLINT_Node (fallback): " & CLINT_Node'Image);
       end if;
       if CLINT_Node /= null then
          Print_DTB_Node(CLINT_Node);
          declare
             CLINT_Reg : Unsigned_64_Array :=
-              Get_Property_Unsigned_64(CLINT_Node, "reg");
+              Get_Property_Unsigned_64(CLINT_Node, "reg" );
          begin
             if CLINT_Reg'Length >= 4 then
                Arch.CLINT.Set_CLINT_Configuration(
@@ -118,33 +118,33 @@ package body Arch.Entrypoint is
                  MTime_Offset    => CLINT_Reg(3),
                  MTimecmp_Offset => CLINT_Reg(4),
                  Enabled         => True);
-               Arch.Debug.Print("CLINT configured from DTB.");
+               Arch.Debug.Print ( "CLINT configured from DTB." );
             else
                Arch.Debug.Print(
-                 "CLINT DTB info incomplete; using defaults.");
+                 "CLINT DTB info incomplete; using defaults." );
                Arch.CLINT.Set_CLINT_Configuration;
             end if;
          end;
       else
          Arch.Debug.Print(
-           "CLINT node not found; using defaults.");
+           "CLINT node not found; using defaults." );
          Arch.CLINT.Set_CLINT_Configuration;
       end if;
 
       -- 8. PLIC config
-      Arch.Debug.Print("Search for PLIC node in DTB");
-      PLIC_Node := Find_Node_By_Compatible("riscv,plic");
+      Arch.Debug.Print ( "Search for PLIC node in DTB" );
+      PLIC_Node := Find_Node_By_Compatible ( "riscv,plic" );
       if PLIC_Node = null then
-         PLIC_Node := Find_Node_By_Compatible("riscv,interrupt-controller");
-         Arch.Debug.Print("PLIC_Node (fallback): " & PLIC_Node'Image);
+         PLIC_Node := Find_Node_By_Compatible ( "riscv,interrupt-controller" );
+         Arch.Debug.Print ( "PLIC_Node (fallback): " & PLIC_Node'Image);
       end if;
       if PLIC_Node /= null then
          Print_DTB_Node(PLIC_Node);
          declare
             PLIC_Reg : Unsigned_64_Array :=
-              Get_Property_Unsigned_64(PLIC_Node, "reg");
+              Get_Property_Unsigned_64(PLIC_Node, "reg" );
          begin
-            Arch.Debug.Print("PLIC_Reg: parsing PLIC node");
+            Arch.Debug.Print ( "PLIC_Reg: parsing PLIC node" );
             if PLIC_Reg'Length >= 2 then
                Arch.PLIC.Set_PLIC_Configuration(
                  Base_Address => System.Storage_Elements.To_Address(
@@ -158,37 +158,37 @@ package body Arch.Entrypoint is
                  Contexts_Per_Hart   => Unsigned_64(1),
                  Enabled             => True);
                Arch.Debug.Print(
-                 "PLIC configured from DTB and SMP info.");
+                 "PLIC configured from DTB and SMP info." );
             else
                Arch.Debug.Print(
-                 "PLIC DTB info incomplete; using defaults.");
+                 "PLIC DTB info incomplete; using defaults." );
                Arch.PLIC.Set_PLIC_Configuration;
             end if;
          end;
       else
          Arch.Debug.Print(
-           "PLIC node not found; using defaults.");
+           "PLIC node not found; using defaults." );
          Arch.PLIC.Set_PLIC_Configuration;
       end if;
 
       -- 9. Interrupt init
       Arch.Debug.Print(
         "Initializing interrupt controllers for " &
-        Unsigned_64'Image(Num_Harts) & " cores");
+        Unsigned_64'Image(Num_Harts) & " cores" );
       Arch.Interrupts.Initialize;
-      Arch.Debug.Print("Interrupt controllers initialized");
+      Arch.Debug.Print ( "Interrupt controllers initialized" );
 
       -- 10. Trap vector
-      Arch.Debug.Print("Setting trap entry vector");
+      Arch.Debug.Print ( "Setting trap entry vector" );
       Arch.CPU.Set_Trap_Vector;
 
       -- 11. Command line & Main
-      Debug.Print("Copying command line");
+      Debug.Print ( "Copying command line" );
       Arch.Cmdline_Len := Info.Cmdline_Len;
       Arch.Cmdline(1 .. Info.Cmdline_Len) :=
          Info.Cmdline(1 .. Info.Cmdline_Len);
-      Debug.Print("Command line copied");
-      Debug.Print("Jumping to main kernel");
+      Debug.Print ( "Command line copied" );
+      Debug.Print ( "Jumping to main kernel" );
       Main;
    end Bootstrap_Main;
 

@@ -16,6 +16,7 @@
 
 with System;
 with Interfaces; use Interfaces;
+with System.Storage_Elements; use System.Storage_Elements;
 
 package Arch.PLIC with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
