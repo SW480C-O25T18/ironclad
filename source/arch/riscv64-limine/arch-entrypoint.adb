@@ -1,4 +1,3 @@
---  filepath: /home/sean/capstone/ironclad/source/arch/riscv64-limine/arch-entrypoint.adb
 --  arch-entrypoint.adb: Limine plops us here.
 --  Copyright (C) 2024 streaksu
 --  Copyright (C) 2025 scweeks
