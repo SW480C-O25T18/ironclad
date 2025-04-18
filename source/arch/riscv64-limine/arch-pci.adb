@@ -18,15 +18,7 @@ with Arch.Snippets;
 with Lib.Panic;
 with Arch.CPU;
 
-pragma Unreferenced(Arch.Snippets);
-pragma Unreferenced(Lib.Panic);
-pragma Unreferenced(Arch.CPU);
-pragma Warnings (Off, "Unreferenced parameter");
-pragma Warnings (Off, "Unreferenced variable");
-pragma Warnings (Off, "Unreferenced function");
-pragma Warnings (Off, "Unreferenced procedure");
-pragma Warnings (Off, "Unreferenced type");
-pragma Warnings (Off, "Uninitialized variable");
+pragma Warnings (Off);
 
 package body Arch.PCI is
    function Is_Supported return Boolean is
