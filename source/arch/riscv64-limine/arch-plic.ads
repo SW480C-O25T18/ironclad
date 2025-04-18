@@ -15,7 +15,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with System;
+with System; use System;
 with Interfaces; use Interfaces;
 with System.Storage_Elements; use System.Storage_Elements;
 
@@ -36,9 +36,9 @@ package Arch.PLIC with SPARK_Mode => Off is
    --  Ada contracts (Pre/Post conditions) are used to enforce interface expectations.
    ------------------------------------------------------------------------------
 
-   -- Set dynamic configuration. All parameters (except those defined by the ISA)
-   -- come from the DTB (or a higher-level configuration module). The parameter
-   -- Enabled indicates if the PLIC is supported on this platform.
+   --  Set dynamic configuration. All parameters (except those defined by the ISA)
+   --  come from the DTB (or a higher-level configuration module). The parameter
+   --  Enabled indicates if the PLIC is supported on this platform.
    procedure Set_PLIC_Configuration (
       Base_Address         : System.Address := System.Storage_Elements.To_Address (16#0C000000#);
       Priority_Offset      : Unsigned_64   := 0;
