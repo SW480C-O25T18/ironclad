@@ -112,9 +112,8 @@ package body Arch.Entrypoint is
          begin
             if CLINT_Reg'Length >= 4 then
                Arch.CLINT.Set_CLINT_Configuration(
-                 Base_Address    =>
-                   System.Address'To_Address(
-                     U64_To_Int_Addr(CLINT_Reg(1))),
+                 Base_Address => System.Storage_Elements.To_Address(
+                  U64_To_Int_Addr(CLINT_Reg(1))),
                  MSIP_Offset     => CLINT_Reg(2),
                  MTime_Offset    => CLINT_Reg(3),
                  MTimecmp_Offset => CLINT_Reg(4),
@@ -148,9 +147,8 @@ package body Arch.Entrypoint is
             Arch.Debug.Print("PLIC_Reg: parsing PLIC node");
             if PLIC_Reg'Length >= 2 then
                Arch.PLIC.Set_PLIC_Configuration(
-                 Base_Address        =>
-                   System.Address'To_Address(
-                     U64_To_Int_Addr(PLIC_Reg(1))),
+                 Base_Address => System.Storage_Elements.To_Address(
+                  U64_To_Int_Addr(PLIC_Reg(1))),
                  Priority_Offset     => Unsigned_64(0),
                  Context_Base_Offset => PLIC_Reg(2),
                  Context_Stride      => Unsigned_64(16#1000#),
