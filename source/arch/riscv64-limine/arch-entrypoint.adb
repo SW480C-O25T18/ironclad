@@ -143,7 +143,6 @@ package body Arch.Entrypoint is
                "Exception occurred during CPU core initialization");
             Lib.Panic.Hard_Panic (
                "CPU core initialization failed");
-      end;
 
       --  7. CLINT config
       begin
@@ -153,7 +152,8 @@ package body Arch.Entrypoint is
             CLINT_Node := Find_Node_By_Compatible (
                "riscv,interrupt-controller");
             Arch.Debug.Print (
-               "CLINT_Node (fallback): " & CLINT_Node'Image);
+               "CLINT_Node (fallback): ");
+            Print_DTB_Node (CLINT_Node);
          end if;
          if CLINT_Node /= null then
             Print_DTB_Node (CLINT_Node);
@@ -183,8 +183,10 @@ package body Arch.Entrypoint is
          end if;
       exception
          when others =>
-            Debug.Print ("Exception occurred during CLINT configuration");
-            Lib.Panic.Hard_Panic ("CLINT configuration failed");
+            Debug.Print (
+               "Exception occurred during CLINT configuration");
+            Lib.Panic.Hard_Panic (
+               "CLINT configuration failed");
       end;
 
       --  8. PLIC config
@@ -192,8 +194,10 @@ package body Arch.Entrypoint is
          Arch.Debug.Print ("Search for PLIC node in DTB");
          PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
          if PLIC_Node = null then
-            PLIC_Node := Find_Node_By_Compatible ("riscv,interrupt-controller");
-            Arch.Debug.Print ("PLIC_Node (fallback): " & PLIC_Node'Image);
+            PLIC_Node := Find_Node_By_Compatible (
+               "riscv,interrupt-controller");
+            Arch.Debug.Print ("PLIC_Node (fallback): ");
+            Print_DTB_Node (PLIC_Node);
          end if;
          if PLIC_Node /= null then
             Print_DTB_Node (PLIC_Node);
@@ -230,8 +234,10 @@ package body Arch.Entrypoint is
          end if;
       exception
          when others =>
-            Debug.Print ("Exception occurred during PLIC config.");
-            Lib.Panic.Hard_Panic ("PLIC configuration failed");
+            Debug.Print (
+               "Exception occurred during PLIC config.");
+            Lib.Panic.Hard_Panic (
+               "PLIC configuration failed");
       end;
 
       --  9. Interrupt init
