@@ -61,28 +61,31 @@ package body Arch.Hooks is
          --  Read value from tp into the memory location pointed to by Arg.
          when 2 =>
             declare
-               Value : Unsigned_64 := Read_TP;
+               Value : constant Unsigned_64 := Read_TP;
             begin
                Ptr.all := Value;
                if Ptr.all = Value then
-                  Debug.Print("PRCTL_Hook: Verification successful; Ptr.all =  Value.");
+                  Debug.Print ("PRCTL_Hook: Verification successful; Ptr.all = Value.");
                   return True;
                else
-                  Debug.Print("PRCTL_Hook: Verification failed; Ptr.all: " &
-                     Unsigned_64'Image(Ptr.all) &
+                  Debug.Print ("PRCTL_Hook: Verification failed; Ptr.all: " & 
+                     Unsigned_64'Image(Ptr.all) & 
                      " /= Value: " & Unsigned_64'Image(Value));
                   return False;
                end if;
             end;
          when others =>
-            Debug.Print("PRCTL_Hook: Unsupported code " & Natural'Image(Code));
+            Debug.Print ("PRCTL_Hook: Unsupported code " & Natural'Image(Code));
             return False;
       end case;
-   exception
-      when Constraint_Error =>
-         Debug.Print("PRCTL_Hook: Constraint_Error encountered while processing Code = " &
-            Natural'Image(Code));
-         return False;
+   if Code > Natural'Last then
+      Debug.Print ("PRCTL_Hook: Invalid Code value, exceeding Natural'Last");
+      return False;
+   else
+      Debug.Print ("PRCTL_Hook: Unexpected error encountered while processing Code = " &
+                   Natural'Image (Code));
+      return False;
+   end if;
    end PRCTL_Hook;
 
    procedure Panic_SMP_Hook is
@@ -105,10 +108,10 @@ package body Arch.Hooks is
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64(H) /= Current_Hart then
             Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
-            Debug.Print("Panic_SMP_Hook: Sent software interrupt to hart " &
+            Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart " &
                         Unsigned_64'Image(Unsigned_64(H)));
          else
-            Debug.Print("Panic_SMP_Hook: Skipping current hart " &
+            Debug.Print ("Panic_SMP_Hook: Skipping current hart " &
                         Unsigned_64'Image(Current_Hart));
          end if;
       end loop;
@@ -126,7 +129,7 @@ package body Arch.Hooks is
       Arch.Snippets.HCF;
    exception
       when Constraint_Error =>
-         Debug.Print("Panic_SMP_Hook: Constraint_Error encountered");
+         Debug.Print ("Panic_SMP_Hook: Constraint_Error encountered");
          null;
    end Panic_SMP_Hook;
 
@@ -182,16 +185,16 @@ package body Arch.Hooks is
    --  --------------------------------------------------------------------
    function Write_TP (Value : Unsigned_64) return Boolean is
    begin
-      Debug.Print("Writing to TP register: " & Unsigned_64'Image(Value));
+      Debug.Print ("Writing to TP register: " & Unsigned_64'Image(Value));
       Asm ("mv tp, %0",
            Inputs   => Unsigned_64'Asm_Input("r", Value),
            Clobber  => "memory",
            Volatile => True);
-      Debug.Print("TP register written");
+      Debug.Print ("TP register written");
       return True;
    exception
       when Constraint_Error =>
-         Debug.Print("Write_TP: Constraint_Error encountered");
+         Debug.Print ("Write_TP: Constraint_Error encountered");
          return False;
    end Write_TP;
 end Arch.Hooks;
