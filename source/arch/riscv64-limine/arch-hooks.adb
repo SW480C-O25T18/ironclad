@@ -21,7 +21,6 @@ with Arch.Snippets;
 with Arch.CPU; use Arch.CPU;
 with Arch.CLINT; use Arch.CLINT;
 with Interfaces; use Interfaces;
-with Lib.Messages;
 with Devices.Ramdev;
 with Arch.Limine;
 with Ada.Unchecked_Conversion;   -- for Address_To_Unsigned_64
@@ -66,7 +65,7 @@ package body Arch.Hooks is
       Ptr : constant U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
       Debug.Print ("PRCTL_Hook: Code = "
-         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image (Int_Arg));
+         & Natural'Image (Code) & ", Arg = " & Unsigned_64'Image (Int_Arg));
       case Code is
          --  Write new value into tp using inline assembly.
          when 1 =>
@@ -80,7 +79,7 @@ package body Arch.Hooks is
                if Ptr.all = Value then
                   Debug.Print (
                         "PRCTL_Hook: Verification successful;"
-                        & "Ptr.all = " & Unsigned_64'Image(Value));
+                        & "Ptr.all = " & Unsigned_64'Image (Value));
                   return True;
                else
                   Debug.Print ("PRCTL_Hook: Verification failed; Ptr.all: "
@@ -114,7 +113,7 @@ package body Arch.Hooks is
       Arch.Snippets.Disable_Interrupts;
 
       --  Signal all other harts to enter panic state by
-      -- sending a software interrupt.
+      --  sending a software interrupt.
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64 (H) /= Current_Hart then
             Arch.CLINT.Set_Software_Interrupt (Unsigned_64 (H), True);
