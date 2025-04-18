@@ -14,8 +14,10 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+pragma Warnings (Off);
+pragma Unreferenced (Interfaces.C);
+
 package body Arch.ACPI with SPARK_Mode => Off is
-   pragma Warnings (Off, "no entities of ""Interfaces.C"" are referenced");
    function Is_Supported return Boolean is
    begin
       return False;
