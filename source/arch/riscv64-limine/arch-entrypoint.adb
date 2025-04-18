@@ -1,4 +1,3 @@
--- filepath: /home/sean/capstone/ironclad/source/arch/riscv64-limine/arch-entrypoint.adb
 --  arch-entrypoint.adb: Limine plops us here.
 --  Copyright (C) 2024 streaksu
 --
@@ -33,13 +32,13 @@ with Ada.Unchecked_Conversion;
 
 package body Arch.Entrypoint is
 
-   -- Helper: convert a 64-bit unsigned value into an Integer_Address
+   --  Helper: convert a 64-bit unsigned value into an Integer_Address
    function U64_To_Int_Addr is new Ada.Unchecked_Conversion
      (Source => Unsigned_64,
       Target => System.Storage_Elements.Integer_Address);
 
    ------------------------------------------------------------------------
-   -- Bootstrap_Main
+   --  Bootstrap_Main
    ------------------------------------------------------------------------
    procedure Bootstrap_Main is
       Info       : Boot_Information renames Limine.Global_Info;
@@ -48,24 +47,24 @@ package body Arch.Entrypoint is
       CLINT_Node : DTB_Node_Access;
       PLIC_Node  : DTB_Node_Access;
    begin
-      -- UART0 init
+      --  UART0 init
       if not Devices.UART.Init_UART0 then
          Debug.Print ("Devices.UART.Init_UART0 failed");
       end if;
       Arch.Debug.Print ("Hello from kernel entrypoint");
 
-      -- 1. Limine → arch
+      --  1. Limine → arch
       Arch.Debug.Print ("Translating Limine protocol");
       Limine.Translate_Proto;
 
-      -- 2. DTB init
+      --  2. DTB init
       Arch.Debug.Print ("Initializing DTB discovery");
       if not Arch.DTB.Init then
          Lib.Panic.Hard_Panic ("No DTB was found!");
       end if;
       Arch.Debug.Print ("DTB initialized successfully");
 
-      -- 3. Allocators & MMU
+      --  3. Allocators & MMU
       Debug.Print ("Initializing allocators and MMU");
       Arch.Debug.Print ("Initializing allocators");
       Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
@@ -76,12 +75,12 @@ package body Arch.Entrypoint is
       end if;
       Debug.Print ("MMU initialized");
 
-      -- 4. Logging
+      --  4. Logging
       Debug.Print ("Enabling logging");
       Lib.Messages.Enable_Logging;
       Debug.Print ("Logging enabled");
 
-      -- 5. Dump memory map
+      --  5. Dump memory map
       Arch.Debug.Print ("Physical memory map:");
       for E of Info.Memmap (1 .. Info.Memmap_Len) loop
          Addr := E.Start + E.Length;
@@ -90,14 +89,14 @@ package body Arch.Entrypoint is
            & Boot_Memory_Type'Image (E.MemType));
       end loop;
 
-      -- 6. CPU cores
+      --  6. CPU cores
       Arch.Debug.Print ("Initializing CPU cores");
       Arch.CPU.Init_Cores;
       Num_Harts := Unsigned_64 (Arch.CPU.Core_Count);
       Arch.Debug.Print (
         "CPU cores initialized: " & Unsigned_64'Image (Num_Harts));
 
-      -- 7. CLINT config
+      --  7. CLINT config
       Arch.Debug.Print ("Search for CLINT node in DTB");
       CLINT_Node := Find_Node_By_Compatible ("riscv,clint");
       if CLINT_Node = null then
@@ -131,7 +130,7 @@ package body Arch.Entrypoint is
          Arch.CLINT.Set_CLINT_Configuration;
       end if;
 
-      -- 8. PLIC config
+      --  8. PLIC config
       Arch.Debug.Print ("Search for PLIC node in DTB");
       PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
       if PLIC_Node = null then
@@ -171,18 +170,18 @@ package body Arch.Entrypoint is
          Arch.PLIC.Set_PLIC_Configuration;
       end if;
 
-      -- 9. Interrupt init
+      --  9. Interrupt init
       Arch.Debug.Print (
         "Initializing interrupt controllers for " &
         Unsigned_64'Image (Num_Harts) & " cores");
       Arch.Interrupts.Initialize;
       Arch.Debug.Print ("Interrupt controllers initialized");
 
-      -- 10. Trap vector
+      --  10. Trap vector
       Arch.Debug.Print ("Setting trap entry vector");
       Arch.CPU.Set_Trap_Vector;
 
-      -- 11. Command line & Main
+      --  11. Command line & Main
       Debug.Print ("Copying command line");
       Arch.Cmdline_Len := Info.Cmdline_Len;
       Arch.Cmdline (1 .. Info.Cmdline_Len)
