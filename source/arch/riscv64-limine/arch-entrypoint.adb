@@ -1,3 +1,4 @@
+--  filepath: /home/sean/capstone/ironclad/source/arch/riscv64-limine/arch-entrypoint.adb
 --  arch-entrypoint.adb: Limine plops us here.
 --  Copyright (C) 2024 streaksu
 --  Copyright (C) 2025 scweeks
@@ -16,7 +17,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Arch.Debug;
-with Interfaces;        use Interfaces;
 with Devices.UART;
 with Arch.Limine;
 with Lib.Messages;      use Lib.Messages;
@@ -29,20 +29,36 @@ with Main;
 with Arch.Interrupts;
 with Arch.CLINT;
 with Arch.PLIC;
-with Ada.Text_IO;       use Ada.Text_IO;
+with Arch.ACPI;
+with Arch.Clocks;
 with Ada.Unchecked_Conversion;
-
-pragma Warnings (Off);
 
 package body Arch.Entrypoint is
 
-   --  Helper: convert a 64-bit unsigned value into an Integer_Address
+   -- Helper: convert a 64-bit unsigned value into an Integer_Address
    function U64_To_Int_Addr is new Ada.Unchecked_Conversion
      (Source => Unsigned_64,
       Target => System.Storage_Elements.Integer_Address);
 
+   -- Helper: convert Unsigned_64 to String
+   function Unsigned_To_String (Value : Unsigned_64) return String is
+      package Unsigned_IO is new Ada.Text_IO.Integer_IO (Unsigned_64);
+      Buffer : String (1 .. 20); -- Adjust size as needed
+      Last   : Natural;
+   begin
+      Unsigned_IO.Put (Buffer, Value, Last);
+      return Buffer (1 .. Last);
+   end Unsigned_To_String;
+
+   -- Centralized exception handler for better debugging
+   procedure Handle_Exception (Context : String) is
+   begin
+      Arch.Debug.Print ("[Error] Exception occurred during " & Context);
+      Lib.Panic.Hard_Panic (Context & " failed");
+   end Handle_Exception;
+
    ------------------------------------------------------------------------
-   --  Bootstrap_Main
+   -- Bootstrap_Main
    ------------------------------------------------------------------------
    procedure Bootstrap_Main is
       Info       : Boot_Information renames Limine.Global_Info;
@@ -51,85 +67,70 @@ package body Arch.Entrypoint is
       CLINT_Node : DTB_Node_Access;
       PLIC_Node  : DTB_Node_Access;
 
-      --  Helper to convert Unsigned_64 to String
-      function Unsigned_To_String (Value : Unsigned_64) return String is
-         package Unsigned_IO is new Ada.Text_IO.Integer_IO (Unsigned_64);
-         Buffer : String (1 .. 20); -- Adjust size as needed
-         Last   : Natural;
-      begin
-         Unsigned_IO.Put (Buffer, Value, Last);
-         return Buffer (1 .. Last);
-      end Unsigned_To_String;
-
    begin
-      --  UART0 init
+      -- UART0 Initialization
       begin
+         Arch.Debug.Print ("[Stage 1] Initializing UART0...");
          if not Devices.UART.Init_UART0 then
-            Debug.Print ("Devices.UART.Init_UART0 failed");
-         end if;
-         Arch.Debug.Print ("Hello from kernel entrypoint");
-      exception
-         when others =>
-            Debug.Print ("Exception occurred during UART0 initialization");
             Lib.Panic.Hard_Panic ("UART0 initialization failed");
-      end;
-
-      --  1. Limine → arch
-      begin
-         Arch.Debug.Print ("Translating Limine protocol");
-         Limine.Translate_Proto;
+         end if;
+         Arch.Debug.Print ("[Stage 1] UART0 initialized successfully");
       exception
          when others =>
-            Debug.Print (
-               "Exception occurred during Limine protocol translation");
-            Lib.Panic.Hard_Panic (
-               "Limine protocol translation failed");
+            Handle_Exception ("UART0 initialization");
       end;
 
-      --  2. DTB init
+      -- Limine Protocol Translation
       begin
-         Arch.Debug.Print ("Initializing DTB discovery");
+         Arch.Debug.Print ("[Stage 2] Translating Limine protocol...");
+         Limine.Translate_Proto;
+         Arch.Debug.Print ("[Stage 2] Limine protocol translated successfully");
+      exception
+         when others =>
+            Handle_Exception ("Limine protocol translation");
+      end;
+
+      -- DTB Initialization
+      begin
+         Arch.Debug.Print ("[Stage 3] Initializing DTB...");
          if not Arch.DTB.Init then
             Lib.Panic.Hard_Panic ("No DTB was found!");
          end if;
-         Arch.Debug.Print ("DTB initialized successfully");
+         Arch.Debug.Print ("[Stage 3] DTB initialized successfully");
+         Arch.Debug.Print ("[Stage 3] Printing DTB contents:");
+         Print_DTB_Node (Arch.DTB.Root_Node);
       exception
          when others =>
-            Debug.Print ("Exception occurred during DTB initialization");
-            Lib.Panic.Hard_Panic ("DTB initialization failed");
+            Handle_Exception ("DTB initialization");
       end;
 
-      --  3. Allocators & MMU
+      -- Allocators & MMU Initialization
       begin
-         Debug.Print ("Initializing allocators and MMU");
-         Arch.Debug.Print ("Initializing allocators");
+         Arch.Debug.Print ("[Stage 4] Initializing allocators and MMU...");
          Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
-         Debug.Print ("Physical allocator initialized");
-         Debug.Print ("Initializing MMU");
+         Arch.Debug.Print ("[Stage 4] Physical allocator initialized");
          if not Arch.MMU.Init (Info.Memmap (1 .. Info.Memmap_Len)) then
             Lib.Panic.Hard_Panic ("The VMM could not be initialized");
          end if;
-         Debug.Print ("MMU initialized");
+         Arch.Debug.Print ("[Stage 4] MMU initialized successfully");
       exception
          when others =>
-            Debug.Print ("Exception occurred during allocator or MMU initialization");
-            Lib.Panic.Hard_Panic ("Allocator or MMU initialization failed");
+            Handle_Exception ("Allocator or MMU initialization");
       end;
 
-      --  4. Logging
+      -- Logging Initialization
       begin
-         Debug.Print ("Enabling logging");
+         Arch.Debug.Print ("[Stage 5] Enabling logging...");
          Lib.Messages.Enable_Logging;
-         Debug.Print ("Logging enabled");
+         Arch.Debug.Print ("[Stage 5] Logging enabled");
       exception
          when others =>
-            Debug.Print ("Exception occurred during logging initialization");
-            Lib.Panic.Hard_Panic ("Logging initialization failed");
+            Handle_Exception ("Logging initialization");
       end;
 
-      --  5. Dump memory map
+      -- Memory Map Dump
       begin
-         Arch.Debug.Print ("Physical memory map:");
+         Arch.Debug.Print ("[Stage 6] Dumping physical memory map:");
          for E of Info.Memmap (1 .. Info.Memmap_Len) loop
             Addr := E.Start + E.Length;
             Arch.Debug.Print (
@@ -137,86 +138,112 @@ package body Arch.Entrypoint is
               Unsigned_To_String (Addr) & "] " &
               Boot_Memory_Type'Image (E.MemType));
          end loop;
+         Arch.Debug.Print ("[Stage 6] Memory map dump complete");
       exception
          when others =>
-            Debug.Print ("Exception occurred while dumping memory map");
-            Lib.Panic.Hard_Panic ("Memory map dump failed");
+            Handle_Exception ("Memory map dump");
       end;
 
-      --  6. CPU cores
+      -- CPU Initialization
       begin
-         Arch.Debug.Print ("Initializing CPU cores");
+         Arch.Debug.Print ("[Stage 7] Initializing CPU cores...");
          Arch.CPU.Init_Cores;
          Num_Harts := Unsigned_64 (Arch.CPU.Core_Count);
-         Arch.Debug.Print (
-           "CPU cores initialized: " & Unsigned_To_String (Num_Harts));
+         Arch.Debug.Print ("[Stage 7] CPU cores initialized: " & Unsigned_To_String (Num_Harts));
       exception
          when others =>
-            Debug.Print (
-               "Exception occurred during CPU core initialization");
-            Lib.Panic.Hard_Panic (
-               "CPU core initialization failed");
+            Handle_Exception ("CPU core initialization");
       end;
 
-      --  7. CLINT config
+      -- CLINT Configuration
       begin
-         Arch.Debug.Print ("Search for CLINT node in DTB");
+         Arch.Debug.Print ("[Stage 8] Configuring CLINT...");
          CLINT_Node := Find_Node_By_Compatible ("riscv,clint");
-         if CLINT_Node = null then
-            CLINT_Node := Find_Node_By_Compatible (
-               "riscv,interrupt-controller");
-            Arch.Debug.Print ("CLINT_Node (fallback): ");
-            Print_DTB_Node (CLINT_Node);
-         end if;
          if CLINT_Node /= null then
-            Print_DTB_Node (CLINT_Node);
-            declare
-               CLINT_Reg : Unsigned_64_Array :=
-                 Get_Property_Unsigned_64 (CLINT_Node, "reg");
-            begin
-               if CLINT_Reg'Length >= 4 then
-                  Arch.CLINT.Set_CLINT_Configuration (
-                    Base_Address => System.Storage_Elements.To_Address (
-                     U64_To_Int_Addr (CLINT_Reg (1))),
-                    MSIP_Offset     => CLINT_Reg (2),
-                    MTime_Offset    => CLINT_Reg (3),
-                    MTimecmp_Offset => CLINT_Reg (4),
-                    Enabled         => True);
-                  Arch.Debug.Print ("CLINT configured from DTB.");
-               else
-                  Arch.Debug.Print (
-                    "CLINT DTB info incomplete; using defaults.");
-                  Arch.CLINT.Set_CLINT_Configuration;
-               end if;
-            end;
-         else
-            Arch.Debug.Print (
-              "CLINT node not found; using defaults.");
             Arch.CLINT.Set_CLINT_Configuration;
+            Arch.Debug.Print ("[Stage 8] CLINT configured successfully");
+         else
+            Arch.Debug.Print ("[Stage 8] CLINT node not found; using defaults");
          end if;
       exception
          when others =>
-            Debug.Print (
-               "Exception occurred during CLINT configuration");
-            Lib.Panic.Hard_Panic (
-               "CLINT configuration failed");
+            Handle_Exception ("CLINT configuration");
       end;
 
-      --  11. Command line & Main
+      -- PLIC Configuration
       begin
-         Debug.Print ("Copying command line");
+         Arch.Debug.Print ("[Stage 9] Configuring PLIC...");
+         PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
+         if PLIC_Node /= null then
+            Arch.PLIC.Set_PLIC_Configuration;
+            Arch.Debug.Print ("[Stage 9] PLIC configured successfully");
+         else
+            Arch.Debug.Print ("[Stage 9] PLIC node not found; using defaults");
+         end if;
+      exception
+         when others =>
+            Handle_Exception ("PLIC configuration");
+      end;
+
+      -- Trap Handling Configuration
+      begin
+         Arch.Debug.Print ("[Stage 10] Setting up trap handling...");
+         Arch.CPU.Set_Trap_Vector;
+         Arch.Debug.Print ("[Stage 10] Trap handling initialized");
+      exception
+         when others =>
+            Handle_Exception ("Trap handling initialization");
+      end;
+
+      -- Interrupts Initialization
+      begin
+         Arch.Debug.Print ("[Stage 11] Initializing interrupts...");
+         Arch.Interrupts.Initialize;
+         Arch.Debug.Print ("[Stage 11] Interrupts initialized");
+      exception
+         when others =>
+            Handle_Exception ("Interrupt initialization");
+      end;
+
+      -- ACPI Initialization
+      begin
+         Arch.Debug.Print ("[Stage 12] Initializing ACPI...");
+         declare
+            Success : Boolean;
+         begin
+            Arch.ACPI.Initialize (Success);
+            if Success then
+               Arch.Debug.Print ("[Stage 12] ACPI initialized successfully");
+            else
+               Arch.Debug.Print ("[Stage 12] ACPI not supported on this platform");
+            end if;
+         end;
+      exception
+         when others =>
+            Handle_Exception ("ACPI initialization");
+      end;
+
+      -- Clock Sources Initialization
+      begin
+         Arch.Debug.Print ("[Stage 13] Initializing clock sources...");
+         Arch.Clocks.Initialize_Sources;
+         Arch.Debug.Print ("[Stage 13] Clock sources initialized");
+      exception
+         when others =>
+            Handle_Exception ("Clock sources initialization");
+      end;
+
+      -- Command Line & Main Kernel
+      begin
+         Arch.Debug.Print ("[Stage 14] Copying command line...");
          Arch.Cmdline_Len := Info.Cmdline_Len;
-         Arch.Cmdline (1 .. Info.Cmdline_Len)
-            := Info.Cmdline (1 .. Info.Cmdline_Len);
-         Debug.Print ("Command line copied");
-         Debug.Print ("Jumping to main kernel");
+         Arch.Cmdline (1 .. Info.Cmdline_Len) := Info.Cmdline (1 .. Info.Cmdline_Len);
+         Arch.Debug.Print ("[Stage 14] Command line copied");
+         Arch.Debug.Print ("[Stage 14] Jumping to main kernel...");
          Main;
       exception
          when others =>
-            Debug.Print (
-               "Exception occurred during command line setup or main execution");
-            Lib.Panic.Hard_Panic (
-               "Command line setup or main execution failed");
+            Handle_Exception ("Command line setup or main execution");
       end;
    end Bootstrap_Main;
 
