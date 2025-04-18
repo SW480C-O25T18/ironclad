@@ -49,12 +49,12 @@ package body Arch.Hooks is
       Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
       --  For read operations, treat Arg as a pointer to Unsigned_64.
       type U64_Ptr is access all Unsigned_64;
-      function Addr_To_U64_Ptr is 
+      function Addr_To_U64_Ptr is
          new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
       Ptr : constant U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
-      Debug.Print ("PRCTL_Hook: Code = "
-         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
+      Debug.Print ("PRCTL_Hook: Code = " &
+               Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is
          --  Write new value into tp using inline assembly.
          when 1 => return Write_TP (Int_Arg);
@@ -78,6 +78,11 @@ package body Arch.Hooks is
             Debug.Print("PRCTL_Hook: Unsupported code " & Natural'Image(Code));
             return False;
       end case;
+   exception
+      when Constraint_Error =>
+         Debug.Print("PRCTL_Hook: Constraint_Error encountered while processing Code = " &
+            Natural'Image(Code));
+         return False;
    end PRCTL_Hook;
 
    procedure Panic_SMP_Hook is
