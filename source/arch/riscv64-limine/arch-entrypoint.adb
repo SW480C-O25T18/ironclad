@@ -73,10 +73,10 @@ package body Arch.Entrypoint is
       -- 3. Physical allocator & MMU
       Debug.Print("Initializing allocators and MMU");
       Lib.Messages.Put_Line("Initializing allocators");
-      Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
+      Memory.Physical.Init_Allocator(Info.Memmap(1..Info.Memmap_Len));
       Debug.Print("Physical allocator initialized");
       Debug.Print("Initializing MMU");
-      if not Arch.MMU.Init (Info.Memmap (1 .. Info.Memmap_Len)) then
+      if not Arch.MMU.Init(Info.Memmap(1..Info.Memmap_Len)) then
          Lib.Panic.Hard_Panic("The VMM could not be initialized");
       end if;
       Debug.Print("MMU initialized");
@@ -88,12 +88,10 @@ package body Arch.Entrypoint is
 
       -- 5. Dump physical memory map
       Lib.Messages.Put_Line("Physical memory map:");
-      for E of Info.Memmap (1 .. Info.Memmap_Len) loop
+      for E of Info.Memmap(1..Info.Memmap_Len) loop
          Addr := E.Start + E.Length;
-         Lib.Messages.Put_Line(
-            "[" & E.Start'Image & " - " & Addr'Image & "] "
-            & Boot_Memory_Type'Image(E.MemType)
-         );
+         Lib.Messages.Put_Line("[" & E.Start'Image & " - " & Addr'Image & "] " &
+                               Boot_Memory_Type'Image(E.MemType));
       end loop;
 
       -- 6. Init CPU cores
@@ -112,15 +110,14 @@ package body Arch.Entrypoint is
       if CLINT_Node /= null then
          Print_DTB_Node(CLINT_Node);
          declare
-            CLINT_Reg : Unsigned_64_Array :=
-               Get_Property_Unsigned_64(CLINT_Node, "reg");
+            CLINT_Reg : Unsigned_64_Array := Get_Property_Unsigned_64(CLINT_Node, "reg");
          begin
             if CLINT_Reg'Length >= 4 then
                Arch.CLINT.Set_CLINT_Configuration(
                   Base_Address    => To_Address(CLINT_Reg(1)),
-                  MSIP_Offset     => System.Storage_Elements.Integer_Address(CLINT_Reg(2)),
-                  MTime_Offset    => System.Storage_Elements.Integer_Address(CLINT_Reg(3)),
-                  MTimecmp_Offset => System.Storage_Elements.Integer_Address(CLINT_Reg(4)),
+                  MSIP_Offset     => CLINT_Reg(2),
+                  MTime_Offset    => CLINT_Reg(3),
+                  MTimecmp_Offset => CLINT_Reg(4),
                   Enabled         => True
                );
                Arch.Debug.Print("CLINT configured from DTB.");
@@ -144,17 +141,16 @@ package body Arch.Entrypoint is
       if PLIC_Node /= null then
          Print_DTB_Node(PLIC_Node);
          declare
-            PLIC_Reg : Unsigned_64_Array :=
-               Get_Property_Unsigned_64(PLIC_Node, "reg");
+            PLIC_Reg : Unsigned_64_Array := Get_Property_Unsigned_64(PLIC_Node, "reg");
          begin
             Arch.Debug.Print("PLIC_Reg: parsing PLIC node");
             if PLIC_Reg'Length >= 2 then
                Arch.PLIC.Set_PLIC_Configuration(
                   Base_Address        => To_Address(PLIC_Reg(1)),
-                  Priority_Offset     => System.Storage_Elements.Integer_Address(0),
-                  Context_Base_Offset => System.Storage_Elements.Integer_Address(PLIC_Reg(2)),
-                  Context_Stride      => System.Storage_Elements.Integer_Address(16#1000#),
-                  Threshold_Offset    => System.Storage_Elements.Integer_Address(0),
+                  Priority_Offset     => Unsigned_64(0),
+                  Context_Base_Offset => PLIC_Reg(2),
+                  Context_Stride      => Unsigned_64(16#1000#),
+                  Threshold_Offset    => Unsigned_64(0),
                   Max_Interrupt_ID    => Unsigned_64(1023),
                   Max_Harts           => Num_Harts,
                   Contexts_Per_Hart   => Unsigned_64(1),
@@ -172,8 +168,7 @@ package body Arch.Entrypoint is
       end if;
 
       -- 9. Initialize interrupts per core
-      Arch.Debug.Print("Initializing interrupt controllers for "
-                      & Unsigned_64'Image(Num_Harts) & " cores");
+      Arch.Debug.Print("Initializing interrupt controllers for " & Unsigned_64'Image(Num_Harts) & " cores");
       Arch.Interrupts.Initialize;
       Arch.Debug.Print("Interrupt controllers initialized");
 
@@ -184,12 +179,10 @@ package body Arch.Entrypoint is
       -- 11. Copy command line and jump to Main
       Debug.Print("Copying command line");
       Arch.Cmdline_Len := Info.Cmdline_Len;
-      Arch.Cmdline(1 .. Info.Cmdline_Len) :=
-         Info.Cmdline(1 .. Info.Cmdline_Len);
+      Arch.Cmdline(1..Info.Cmdline_Len) := Info.Cmdline(1..Info.Cmdline_Len);
       Debug.Print("Command line copied");
       Debug.Print("Jumping to main kernel");
       Main;
-
    end Bootstrap_Main;
 
 end Arch.Entrypoint;
