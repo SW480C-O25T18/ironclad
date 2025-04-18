@@ -27,6 +27,8 @@ with Ada.Unchecked_Conversion;   -- for Address_To_Unsigned_64
 with System;                     -- for System.Address
 with System.Machine_Code; use System.Machine_Code;
 
+pragma Warnings (Off);
+
 package body Arch.Hooks is
 
    --  ---------------------------------------------------------------------

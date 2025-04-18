@@ -31,6 +31,8 @@ with Arch.CLINT;
 with Arch.PLIC;
 with Ada.Unchecked_Conversion;
 
+pragma Warnings (Off);
+
 package body Arch.Entrypoint is
 
    --  Helper: convert a 64-bit unsigned value into an Integer_Address
@@ -66,8 +68,10 @@ package body Arch.Entrypoint is
          Limine.Translate_Proto;
       exception
          when others =>
-            Debug.Print ("Exception occurred during Limine protocol translation");
-            Lib.Panic.Hard_Panic ("Limine protocol translation failed");
+            Debug.Print (
+               "Exception occurred during Limine protocol translation");
+            Lib.Panic.Hard_Panic (
+               "Limine protocol translation failed");
       end;
 
       --  2. DTB init
@@ -135,8 +139,10 @@ package body Arch.Entrypoint is
            "CPU cores initialized: " & Unsigned_64'Image (Num_Harts));
       exception
          when others =>
-            Debug.Print ("Exception occurred during CPU core initialization");
-            Lib.Panic.Hard_Panic ("CPU core initialization failed");
+            Debug.Print (
+               "Exception occurred during CPU core initialization");
+            Lib.Panic.Hard_Panic (
+               "CPU core initialization failed");
       end;
 
       --  7. CLINT config
@@ -144,8 +150,10 @@ package body Arch.Entrypoint is
          Arch.Debug.Print ("Search for CLINT node in DTB");
          CLINT_Node := Find_Node_By_Compatible ("riscv,clint");
          if CLINT_Node = null then
-            CLINT_Node := Find_Node_By_Compatible ("riscv,interrupt-controller");
-            Arch.Debug.Print ("CLINT_Node (fallback): " & CLINT_Node'Image);
+            CLINT_Node := Find_Node_By_Compatible (
+               "riscv,interrupt-controller");
+            Arch.Debug.Print (
+               "CLINT_Node (fallback): " & CLINT_Node'Image);
          end if;
          if CLINT_Node /= null then
             Print_DTB_Node (CLINT_Node);
@@ -196,7 +204,8 @@ package body Arch.Entrypoint is
                Arch.Debug.Print ("PLIC_Reg: parsing PLIC node");
                if PLIC_Reg'Length >= 2 then
                   Arch.PLIC.Set_PLIC_Configuration (
-                    Base_Address => System.Storage_Elements.To_Address (
+                    Base_Address =>
+                    System.Storage_Elements.To_Address (
                      U64_To_Int_Addr (PLIC_Reg (1))),
                     Priority_Offset     => Unsigned_64 (0),
                     Context_Base_Offset => PLIC_Reg (2),
@@ -221,7 +230,7 @@ package body Arch.Entrypoint is
          end if;
       exception
          when others =>
-            Debug.Print ("Exception occurred during PLIC configuration");
+            Debug.Print ("Exception occurred during PLIC config.");
             Lib.Panic.Hard_Panic ("PLIC configuration failed");
       end;
 
@@ -234,8 +243,10 @@ package body Arch.Entrypoint is
          Arch.Debug.Print ("Interrupt controllers initialized");
       exception
          when others =>
-            Debug.Print ("Exception occurred during interrupt initialization");
-            Lib.Panic.Hard_Panic ("Interrupt initialization failed");
+            Debug.Print (
+               "Exception occurred during interrupt init.");
+            Lib.Panic.Hard_Panic (
+               "Interrupt initialization failed");
       end;
 
       --  10. Trap vector
@@ -244,8 +255,10 @@ package body Arch.Entrypoint is
          Arch.CPU.Set_Trap_Vector;
       exception
          when others =>
-            Debug.Print ("Exception occurred while setting trap vector");
-            Lib.Panic.Hard_Panic ("Trap vector setup failed");
+            Debug.Print (
+               "Exception occurred while setting trap vector");
+            Lib.Panic.Hard_Panic (
+               "Trap vector setup failed");
       end;
 
       --  11. Command line & Main
@@ -259,8 +272,11 @@ package body Arch.Entrypoint is
          Main;
       exception
          when others =>
-            Debug.Print ("Exception occurred during command line setup or main execution");
-            Lib.Panic.Hard_Panic ("Command line setup or main execution failed");
+            Debug.Print (
+               "Exception occurred during command"
+               & " line setup or main execution");
+            Lib.Panic.Hard_Panic (
+               "Command line setup or main execution failed");
       end;
    end Bootstrap_Main;
 
