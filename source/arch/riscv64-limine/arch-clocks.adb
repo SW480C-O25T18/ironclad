@@ -32,6 +32,11 @@ is
    RT_Stored_Seconds        : Unsigned_64;
    RT_Stored_Nanoseconds    : Unsigned_64;
 
+   pragma Unreferenced(RT_Timestamp_Seconds);
+   pragma Unreferenced(RT_Timestamp_Nanoseconds);
+   pragma Unreferenced(RT_Stored_Seconds);
+   pragma Unreferenced(RT_Stored_Nanoseconds);
+
    --  Monotonic TSC cycles per millisecond. Before calibration, the value is
    --  a placeholder, so monotonic always works, it is an estimation.
    MS_Per_Sec    : constant := 1_000;

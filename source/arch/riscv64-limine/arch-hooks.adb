@@ -51,7 +51,7 @@ package body Arch.Hooks is
       type U64_Ptr is access all Unsigned_64;
       function Addr_To_U64_Ptr is new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
       Ptr : U64_Ptr := Addr_To_U64_Ptr (Arg);
-   begin 
+   begin
       Debug.Print ("PRCTL_Hook: Code = " & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is 
          -- Write new value into tp using inline assembly.
@@ -131,7 +131,7 @@ package body Arch.Hooks is
 
    procedure Register_RAM_Files is
    begin
-   Debug.Print ("Register_RAM_Files: Registering RAM files");
+      Debug.Print ("Register_RAM_Files: Registering RAM files");
       if Devices.Ramdev.Init (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len)) then
          Debug.Print ("Register_RAM_Files: RAM files loaded");
       else

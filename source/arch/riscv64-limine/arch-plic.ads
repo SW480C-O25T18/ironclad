@@ -39,7 +39,7 @@ package Arch.PLIC with SPARK_Mode => Off is
    -- come from the DTB (or a higher-level configuration module). The parameter
    -- Enabled indicates if the PLIC is supported on this platform.
    procedure Set_PLIC_Configuration (
-      Base_Address         : System.Address := System'To_Address(16#0C000000#);
+      Base_Address         : System.Address := System.Storage_Elements.To_Address(16#0C000000#);
       Priority_Offset      : Unsigned_64   := 0;
       Context_Base_Offset  : Unsigned_64   := 16#200000#;
       Context_Stride       : Unsigned_64   := 16#1000#;
