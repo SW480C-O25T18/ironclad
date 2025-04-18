@@ -53,8 +53,8 @@ package body Arch.Hooks is
          new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
       Ptr : constant U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
-      Debug.Print ("PRCTL_Hook: Code = " &
-               Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
+      Debug.Print ("PRCTL_Hook: Code = "
+         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is
          --  Write new value into tp using inline assembly.
          when 1 => return Write_TP (Int_Arg);
