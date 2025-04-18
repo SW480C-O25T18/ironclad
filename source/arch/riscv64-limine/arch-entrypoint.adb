@@ -119,7 +119,7 @@ package body Arch.Entrypoint is
             if CLINT_Reg'Length >= 4 then
                Arch.CLINT.Set_CLINT_Configuration(
                   Base_Address    =>
-                    System.Address'To_Address(
+                    System'To_Address(
                       U64_To_Int_Addr(CLINT_Reg(1))
                     ),
                   MSIP_Offset     => CLINT_Reg(2),
@@ -163,7 +163,7 @@ package body Arch.Entrypoint is
             if PLIC_Reg'Length >= 2 then
                Arch.PLIC.Set_PLIC_Configuration(
                   Base_Address        =>
-                    System.Address'To_Address(
+                    System'To_Address(
                       U64_To_Int_Addr(PLIC_Reg(1))
                     ),
                   Priority_Offset     => Unsigned_64(0),
