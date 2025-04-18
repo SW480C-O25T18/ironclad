@@ -14,6 +14,9 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+pragma Unreferenced (Interfaces.C);
+pragma Unused (Interfaces.C);
+
 package body Arch.ACPI with SPARK_Mode => Off is
    function Is_Supported return Boolean is
    begin
@@ -28,18 +31,18 @@ package body Arch.ACPI with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    function FindTable (Signature : SDT_Signature) return Virtual_Address is
       pragma Unreferenced (Signature);
-      -- This function is not implemented in this version.
-      -- It should return the address of the ACPI table with the given signature.
-      -- For now, we return 0 to indicate that the table was not found.
+      --  This function is not implemented in this version.
+      --  It should return the address of the ACPI table with the given signature.
+      --  For now, we return 0 to indicate that the table was not found.
    begin
       return 0;
    end FindTable;
    ----------------------------------------------------------------------------
    procedure Enter_Sleep (Level : Sleep_Level; Success : out Boolean) is
       pragma Unreferenced (Level, Success);
-      -- This procedure is not implemented in this version.
-      -- It should put the system into the specified sleep level.
-      -- For now, we set Success to False to indicate failure.
+      --  This procedure is not implemented in this version.
+      --  It should put the system into the specified sleep level.
+      --  For now, we set Success to False to indicate failure.
    begin
       Success := False;
    end Enter_Sleep;
