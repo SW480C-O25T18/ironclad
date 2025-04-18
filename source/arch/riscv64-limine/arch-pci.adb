@@ -14,9 +14,18 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
---with Arch.Snippets;
+with Arch.Snippets;
 with Lib.Panic;
 with Arch.CPU;
+
+pragma Unreferenced(Arch.Snippets);
+pragma Unreferenced(Lib.Panic);
+pragma Unreferenced(Arch.CPU);
+pragma Warnings (Off, "Unreferenced parameter");
+pragma Warnings (Off, "Unreferenced variable");
+pragma Warnings (Off, "Unreferenced function");
+pragma Warnings (Off, "Unreferenced procedure");
+pragma Warnings (Off, "Unreferenced type");
 
 package body Arch.PCI is
    function Is_Supported return Boolean is
@@ -43,7 +52,7 @@ package body Arch.PCI is
        Subclass     : Unsigned_8;
        Prog_If      : Unsigned_8;
        Idx          : Natural;
-       Result       : out PCI_Device := 0;
+       Result       : out PCI_Device;
        Success      : out Boolean)
    is
    begin
@@ -54,7 +63,7 @@ package body Arch.PCI is
       (Bus     : Unsigned_8;
        Slot    : Unsigned_8;
        Func    : Unsigned_8;
-       Result  : out PCI_Device := 0;
+       Result  : out PCI_Device;
        Success : out Boolean)
    is
    begin

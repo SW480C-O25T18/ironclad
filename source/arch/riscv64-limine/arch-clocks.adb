@@ -32,16 +32,19 @@ is
    RT_Stored_Seconds        : Unsigned_64;
    RT_Stored_Nanoseconds    : Unsigned_64;
 
-   pragma Unreferenced(RT_Timestamp_Seconds);
-   pragma Unreferenced(RT_Timestamp_Nanoseconds);
-   pragma Unreferenced(RT_Stored_Seconds);
-   pragma Unreferenced(RT_Stored_Nanoseconds);
+   --  pragma Unused (RT_Timestamp_Seconds);
+   --  pragma Unused (RT_Timestamp_Nanoseconds);
+   --  pragma Unused (RT_Stored_Seconds);
+   --  pragma Unused (RT_Stored_Nanoseconds);
 
    --  Monotonic TSC cycles per millisecond. Before calibration, the value is
    --  a placeholder, so monotonic always works, it is an estimation.
    MS_Per_Sec    : constant := 1_000;
    Nanos_Per_MS  : constant := 1_000_000;
    Mono_TSC_Freq : Unsigned_64 := Nanos_Per_MS * 2;
+
+   pragma Unreferenced (MS_Per_Sec);
+   pragma Unreferenced (Mono_TSC_Freq);
 
    procedure Initialize_Sources is
    begin
