@@ -26,6 +26,7 @@ pragma Warnings (Off, "Unreferenced variable");
 pragma Warnings (Off, "Unreferenced function");
 pragma Warnings (Off, "Unreferenced procedure");
 pragma Warnings (Off, "Unreferenced type");
+pragma Warnings (Off, "Uninitialized variable");
 
 package body Arch.PCI is
    function Is_Supported return Boolean is

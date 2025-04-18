@@ -19,7 +19,6 @@ with Arch.Debug;
 with Arch.Snippets;
 with Arch.CPU; use Arch.CPU;
 with Arch.CLINT; use Arch.CLINT;
-with Arch.Interrupts;
 with Interfaces; use Interfaces;
 with Lib.Messages;
 with Devices.Ramdev;
@@ -30,9 +29,9 @@ with System.Machine_Code; use System.Machine_Code;
 
 package body Arch.Hooks is
 
-   -----------------------------------------------------------------------
-   -- This helper function converts an address to an Unsigned_64 type. 
-   -----------------------------------------------------------------------
+   --  ---------------------------------------------------------------------
+   --  This helper function converts an address to an Unsigned_64 type. 
+   --  ---------------------------------------------------------------------
    function Address_To_Unsigned_64 is new Ada.Unchecked_Conversion (System.Address, Unsigned_64);
 
    function Read_TP return Unsigned_64;
@@ -84,17 +83,17 @@ package body Arch.Hooks is
       -- Use the global core count from Arch.CPU as the total number of active harts.
       Hart_Count   : constant Positive    := Arch.CPU.Core_Count;
    begin
-      ------------------------------------------------------------------------------
-      -- Disable interrupts on the current core.
-      -- This prevents further interrupts during the panic sequence.
-      ------------------------------------------------------------------------------
+      --  --  --------------------------------------------------------------------------
+      --  Disable interrupts on the current core.
+      --  This prevents further interrupts during the panic sequence.
+      --  --  --------------------------------------------------------------------------
       Arch.Snippets.Disable_Interrupts;
 
-      ------------------------------------------------------------------------------
-      -- Signal all other harts to enter panic state by sending a software interrupt.
-      -- We iterate over all cores (from 0 to Hart_Count - 1), and for each core 
-      -- other than the current one, we trigger a software interrupt using the CLINT.
-      ------------------------------------------------------------------------------
+      --  --  --------------------------------------------------------------------------
+      --  Signal all other harts to enter panic state by sending a software interrupt.
+      --  We iterate over all cores (from 0 to Hart_Count - 1), and for each core 
+      --  other than the current one, we trigger a software interrupt using the CLINT.
+      --  --  --------------------------------------------------------------------------
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64(H) /= Current_Hart then
             Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
@@ -106,16 +105,16 @@ package body Arch.Hooks is
          end if;
       end loop;
 
-      ------------------------------------------------------------------------------
-      -- Print a system-wide panic message.
-      ------------------------------------------------------------------------------
+      --  --  --------------------------------------------------------------------------
+      --  Print a system-wide panic message.
+      --  --  --------------------------------------------------------------------------
       Lib.Messages.Put_Line("Panic_SMP_Hook: Panic: System Halted");
 
-      ------------------------------------------------------------------------------
-      -- Halt the current hart (this core halts last).
-      -- Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current 
-      -- core into an unrecoverable halt state.
-      ------------------------------------------------------------------------------
+      --  --  --------------------------------------------------------------------------
+      --  Halt the current hart (this core halts last).
+      --  Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current 
+      --  core into an unrecoverable halt state.
+      --  --  --------------------------------------------------------------------------
       Arch.Snippets.HCF;
    exception
       when Constraint_Error =>
@@ -145,17 +144,17 @@ package body Arch.Hooks is
    pragma Inline (Read_TP); 
    pragma Inline (Write_TP);
 
-   ----------------------------------------------------------------------
+   --  --------------------------------------------------------------------
    --  Read and write the TP register. The TP register is used to store the
-   -- thread pointer in the RISC-V architecture. The TP register is used to
+   --  thread pointer in the RISC-V architecture. The TP register is used to
    --  store the address of the current thread's stack. The TP register is
    --  used to access the thread-local storage (TLS) area for the current
-   -- thread.
-   ----------------------------------------------------------------------
+   --  thread.
+   --  --------------------------------------------------------------------
 
-   ----------------------------------------------------------------------
+   --  --------------------------------------------------------------------
    --  Read the TP register (x4) via a register‐move
-   ----------------------------------------------------------------------
+   --  --------------------------------------------------------------------
    function Read_TP return Unsigned_64 is
       Value : Unsigned_64;
    begin
@@ -168,9 +167,9 @@ package body Arch.Hooks is
       return Value;
    end Read_TP;
 
-   ----------------------------------------------------------------------
+   --  --------------------------------------------------------------------
    --  Write the TP register (x4) via a register‐move
-   ----------------------------------------------------------------------
+   --  --------------------------------------------------------------------
    function Write_TP (Value : Unsigned_64) return Boolean is
    begin
       Debug.Print("Writing to TP register: " & Unsigned_64'Image(Value));
