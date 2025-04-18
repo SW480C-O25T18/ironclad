@@ -63,14 +63,14 @@ package body Arch.Hooks is
       type U64_Ptr is access all Unsigned_64;
       function Addr_To_U64_Ptr is
          new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
-      Ptr : constant U64_Ptr := Addr_To_U64_Ptr(Arg);
+      Ptr : constant U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
       Debug.Print ("PRCTL_Hook: Code = "
-         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
+         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image (Int_Arg));
       case Code is
          --  Write new value into tp using inline assembly.
          when 1 =>
-            return Write_TP(Int_Arg);
+            return Write_TP (Int_Arg);
          --  Read value from tp into the memory location pointed to by Arg.
          when 2 =>
             declare
@@ -84,14 +84,14 @@ package body Arch.Hooks is
                   return True;
                else
                   Debug.Print ("PRCTL_Hook: Verification failed; Ptr.all: "
-                              & Unsigned_64'Image(Ptr.all)
-                              & " /= Value: " & Unsigned_64'Image(Value));
+                              & Unsigned_64'Image (Ptr.all)
+                              & " /= Value: " & Unsigned_64'Image (Value));
                   return False;
                end if;
             end;
          when others =>
             Debug.Print (
-               "PRCTL_Hook: Unsupported code " & Natural'Image(Code));
+               "PRCTL_Hook: Unsupported code " & Natural'Image (Code));
             return False;
       end case;
    exception
@@ -116,18 +116,18 @@ package body Arch.Hooks is
       --  Signal all other harts to enter panic state by
       -- sending a software interrupt.
       for H in 0 .. Hart_Count - 1 loop
-         if Unsigned_64(H) /= Current_Hart then
-            Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
+         if Unsigned_64 (H) /= Current_Hart then
+            Arch.CLINT.Set_Software_Interrupt (Unsigned_64 (H), True);
             Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart "
-                        & Unsigned_64'Image(Unsigned_64(H)));
+                        & Unsigned_64'Image (Unsigned_64 (H)));
          else
             Debug.Print ("Panic_SMP_Hook: Skipping current hart "
-                        & Unsigned_64'Image(Current_Hart));
+                        & Unsigned_64'Image (Current_Hart));
          end if;
       end loop;
 
       --  Print a system-wide panic message.
-      Lib.Messages.Put_Line("Panic_SMP_Hook: Panic: System Halted");
+      Debug.Print ("Panic_SMP_Hook: Panic: System Halted");
 
       --  Halt the current hart (this core halts last).
       Arch.Snippets.HCF;
@@ -157,12 +157,13 @@ package body Arch.Hooks is
    procedure Register_RAM_Files is
    begin
       Debug.Print ("Register_RAM_Files: Registering RAM files");
-      if Devices.Ramdev.Init(
-            Limine.Global_Info.RAM_Files(
-               1 .. Limine.Global_Info.RAM_Files_Len)) then
+      if Devices.Ramdev.Init (
+            Limine.Global_Info.RAM_Files (
+                     1 .. Limine.Global_Info.RAM_Files_Len)
+               ) then
          Debug.Print ("Register_RAM_Files: RAM files loaded");
       else
-         Lib.Messages.Put_Line(
+         Debug.Print (
             "Register_RAM_Files: Errored while loading RAM files");
       end if;
    exception
@@ -170,8 +171,8 @@ package body Arch.Hooks is
          Debug.Print ("Register_RAM_Files: Exception occurred");
    end Register_RAM_Files;
 
-   pragma Inline(Read_TP);
-   pragma Inline(Write_TP);
+   pragma Inline (Read_TP);
+   pragma Inline (Write_TP);
 
    --  --------------------------------------------------------------------
    --  Read the TP register (x4) via a register‐move
@@ -180,8 +181,8 @@ package body Arch.Hooks is
       Value : Unsigned_64;
    begin
       Debug.Print ("Reading TP register");
-      Asm("mv %0, tp",
-          Outputs  => Unsigned_64'Asm_Output("=r", Value),
+      Asm ("mv %0, tp",
+          Outputs  => Unsigned_64'Asm_Output ("=r", Value),
           Clobber  => "memory",
           Volatile => True);
       return Value;
@@ -196,9 +197,9 @@ package body Arch.Hooks is
    --  --------------------------------------------------------------------
    function Write_TP (Value : Unsigned_64) return Boolean is
    begin
-      Debug.Print ("Writing to TP register: " & Unsigned_64'Image(Value));
-      Asm("mv tp, %0",
-          Inputs   => Unsigned_64'Asm_Input("r", Value),
+      Debug.Print ("Writing to TP register: " & Unsigned_64'Image (Value));
+      Asm ("mv tp, %0",
+          Inputs   => Unsigned_64'Asm_Input ("r", Value),
           Clobber  => "memory",
           Volatile => True);
       return True;
