@@ -48,7 +48,8 @@ package body Arch.Hooks is
       return Devices.UART.Init_UART0;
    exception
       when others =>
-         Debug.Print ("Devices_Hook: Exception occurred during UART0 initialization");
+         Debug.Print (
+            "Devices_Hook: Exception occurred during UART0 initialization");
          return False;
    end Devices_Hook;
 
@@ -57,15 +58,15 @@ package body Arch.Hooks is
    --  ---------------------------------------------------------------------
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
       --  Convert Arg to an Unsigned_64 for write operations.
-      Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64(Arg);
+      Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
       --  For read operations, treat Arg as a pointer to Unsigned_64.
       type U64_Ptr is access all Unsigned_64;
       function Addr_To_U64_Ptr is
-         new Ada.Unchecked_Conversion(System.Address, U64_Ptr);
+         new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
       Ptr : constant U64_Ptr := Addr_To_U64_Ptr(Arg);
    begin
-      Debug.Print ("PRCTL_Hook: Code = " & 
-                  Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
+      Debug.Print ("PRCTL_Hook: Code = "
+         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is
          --  Write new value into tp using inline assembly.
          when 1 =>
@@ -77,17 +78,20 @@ package body Arch.Hooks is
             begin
                Ptr.all := Value;
                if Ptr.all = Value then
-                  Debug.Print ("PRCTL_Hook: Verification successful; Ptr.all = Value.");
+                  Debug.Print (
+                        "PRCTL_Hook: Verification successful;"
+                        & "Ptr.all = " & Unsigned_64'Image(Value));
                   return True;
                else
-                  Debug.Print ("PRCTL_Hook: Verification failed; Ptr.all: " &
-                              Unsigned_64'Image(Ptr.all) &
-                              " /= Value: " & Unsigned_64'Image(Value));
+                  Debug.Print ("PRCTL_Hook: Verification failed; Ptr.all: "
+                              & Unsigned_64'Image(Ptr.all)
+                              & " /= Value: " & Unsigned_64'Image(Value));
                   return False;
                end if;
             end;
          when others =>
-            Debug.Print ("PRCTL_Hook: Unsupported code " & Natural'Image(Code));
+            Debug.Print (
+               "PRCTL_Hook: Unsupported code " & Natural'Image(Code));
             return False;
       end case;
    exception
@@ -102,21 +106,23 @@ package body Arch.Hooks is
    procedure Panic_SMP_Hook is
       --  Obtain the ID of the current hart by reading the mhartid CSR.
       Current_Hart : constant Unsigned_64 := CPU.Read_Hart_ID;
-      --  Use the global core count from Arch.CPU as the total number of active harts.
+      --  Use the global core count from Arch.CPU
+      --  as the total number of active harts.
       Hart_Count   : constant Positive := Arch.CPU.Core_Count;
    begin
       --  Disable interrupts on the current core.
       Arch.Snippets.Disable_Interrupts;
 
-      --  Signal all other harts to enter panic state by sending a software interrupt.
+      --  Signal all other harts to enter panic state by
+      -- sending a software interrupt.
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64(H) /= Current_Hart then
             Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
-            Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart " &
-                        Unsigned_64'Image(Unsigned_64(H)));
+            Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart "
+                        & Unsigned_64'Image(Unsigned_64(H)));
          else
-            Debug.Print ("Panic_SMP_Hook: Skipping current hart " &
-                        Unsigned_64'Image(Current_Hart));
+            Debug.Print ("Panic_SMP_Hook: Skipping current hart "
+                        & Unsigned_64'Image(Current_Hart));
          end if;
       end loop;
 
@@ -136,7 +142,8 @@ package body Arch.Hooks is
    --  ---------------------------------------------------------------------
    function Get_Active_Core_Count return Positive is
    begin
-      Debug.Print ("Arch.Hooks.Get_Active_Core_Count: Getting active core count");
+      Debug.Print (
+         "Arch.Hooks.Get_Active_Core_Count: Getting active core count");
       return Core_Count;
    exception
       when others =>
@@ -155,7 +162,8 @@ package body Arch.Hooks is
                1 .. Limine.Global_Info.RAM_Files_Len)) then
          Debug.Print ("Register_RAM_Files: RAM files loaded");
       else
-         Lib.Messages.Put_Line("Register_RAM_Files: Errored while loading RAM files");
+         Lib.Messages.Put_Line(
+            "Register_RAM_Files: Errored while loading RAM files");
       end if;
    exception
       when others =>
