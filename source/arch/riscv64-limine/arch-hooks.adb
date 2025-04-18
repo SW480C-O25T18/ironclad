@@ -154,17 +154,13 @@ package body Arch.Hooks is
    ----------------------------------------------------------------------
 
    ----------------------------------------------------------------------
-   --  Read the TP register. The TP register is used to store the thread
-   -- pointer in the RISC-V architecture. The TP register is used to
-   -- store the address of the current thread's stack. The TP register is
-   -- used to access the thread-local storage (TLS) area for the current
-   -- thread.
+   --  Read the TP register (x4) via a register‐move
    ----------------------------------------------------------------------
    function Read_TP return Unsigned_64 is
       Value : Unsigned_64;
    begin
       Debug.Print ("Reading TP register");
-      Asm ("csrr %0, tp",
+      Asm ("mv %0, tp",
            Outputs  => Unsigned_64'Asm_Output ("=r", Value),
            Clobber  => "memory",
            Volatile => True);
@@ -173,24 +169,20 @@ package body Arch.Hooks is
    end Read_TP;
 
    ----------------------------------------------------------------------
-   --  Write the TP register. The TP register is used to store the
-   -- thread pointer in the RISC-V architecture. The TP register is
-   -- used to store the address of the current thread's stack. The
-   -- TP register is used to access the thread-local storage (TLS)
-   -- area for the current thread.
+   --  Write the TP register (x4) via a register‐move
    ----------------------------------------------------------------------
    function Write_TP (Value : Unsigned_64) return Boolean is
    begin
       Debug.Print("Writing to TP register: " & Unsigned_64'Image(Value));
-      Asm ("csrw tp, %0",
-         Inputs   => Unsigned_64'Asm_Input("r", Value),
-         Clobber  => "memory",
-         Volatile => True);
+      Asm ("mv tp, %0",
+           Inputs   => Unsigned_64'Asm_Input("r", Value),
+           Clobber  => "memory",
+           Volatile => True);
       Debug.Print("TP register written");
       return True;
    exception
       when Constraint_Error =>
          Debug.Print("Write_TP: Constraint_Error encountered");
          return False;
-end Write_TP;
+   end Write_TP;
 end Arch.Hooks;
