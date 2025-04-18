@@ -30,9 +30,10 @@ with System.Machine_Code; use System.Machine_Code;
 package body Arch.Hooks is
 
    --  ---------------------------------------------------------------------
-   --  This helper function converts an address to an Unsigned_64 type. 
+   --  This helper function converts an address to an Unsigned_64 type.
    --  ---------------------------------------------------------------------
-   function Address_To_Unsigned_64 is new Ada.Unchecked_Conversion (System.Address, Unsigned_64);
+   function Address_To_Unsigned_64 is 
+      new Ada.Unchecked_Conversion (System.Address, Unsigned_64);
 
    function Read_TP return Unsigned_64;
    function Write_TP (Value : Unsigned_64) return Boolean;
@@ -44,18 +45,18 @@ package body Arch.Hooks is
    end Devices_Hook;
 
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
-      -- Convert Arg to an Unsigned_64 for write operations. 
+      --  Convert Arg to an Unsigned_64 for write operations. 
       Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
-      -- For read operations, treat Arg as a pointer to Unsigned_64. 
+      --  For read operations, treat Arg as a pointer to Unsigned_64. 
       type U64_Ptr is access all Unsigned_64;
       function Addr_To_U64_Ptr is new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
       Ptr : U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
       Debug.Print ("PRCTL_Hook: Code = " & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
       case Code is 
-         -- Write new value into tp using inline assembly.
+         --  Write new value into tp using inline assembly.
          when 1 => return Write_TP (Int_Arg);
-         -- Read value from tp into the memory location pointed to by Arg.
+         --  Read value from tp into the memory location pointed to by Arg.
          when 2 =>
             declare
                Value : Unsigned_64 := Read_TP;
@@ -78,22 +79,22 @@ package body Arch.Hooks is
    end PRCTL_Hook;
 
    procedure Panic_SMP_Hook is
-      -- Obtain the ID of the current hart by reading the mhartid CSR.
+      --  Obtain the ID of the current hart by reading the mhartid CSR.
       Current_Hart : constant Unsigned_64 := CPU.Read_Hart_ID;
-      -- Use the global core count from Arch.CPU as the total number of active harts.
+      --  Use the global core count from Arch.CPU as the total number of active harts.
       Hart_Count   : constant Positive    := Arch.CPU.Core_Count;
    begin
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       --  Disable interrupts on the current core.
       --  This prevents further interrupts during the panic sequence.
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       Arch.Snippets.Disable_Interrupts;
 
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       --  Signal all other harts to enter panic state by sending a software interrupt.
       --  We iterate over all cores (from 0 to Hart_Count - 1), and for each core 
       --  other than the current one, we trigger a software interrupt using the CLINT.
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64(H) /= Current_Hart then
             Arch.CLINT.Set_Software_Interrupt(Unsigned_64(H), True);
@@ -105,16 +106,16 @@ package body Arch.Hooks is
          end if;
       end loop;
 
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       --  Print a system-wide panic message.
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       Lib.Messages.Put_Line("Panic_SMP_Hook: Panic: System Halted");
 
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       --  Halt the current hart (this core halts last).
       --  Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current 
       --  core into an unrecoverable halt state.
-      --  --  --------------------------------------------------------------------------
+      --  ----------------------------------------------------------------------------
       Arch.Snippets.HCF;
    exception
       when Constraint_Error =>
@@ -131,7 +132,9 @@ package body Arch.Hooks is
    procedure Register_RAM_Files is
    begin
       Debug.Print ("Register_RAM_Files: Registering RAM files");
-      if Devices.Ramdev.Init (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len)) then
+      if Devices.Ramdev.Init (
+            Limine.Global_Info.RAM_Files (
+                  1 .. Limine.Global_Info.RAM_Files_Len)) then
          Debug.Print ("Register_RAM_Files: RAM files loaded");
       else
          Lib.Messages.Put_Line ("Register_RAM_Files: Could not load RAM files");
