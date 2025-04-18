@@ -39,12 +39,22 @@ package body Arch.Hooks is
    function Read_TP return Unsigned_64;
    function Write_TP (Value : Unsigned_64) return Boolean;
 
+   --  ---------------------------------------------------------------------
+   --  Devices_Hook: Initializes UART0.
+   --  ---------------------------------------------------------------------
    function Devices_Hook return Boolean is
    begin
       Debug.Print("Devices_Hook: Initializing UART0");
       return Devices.UART.Init_UART0;
+   exception
+      when others =>
+         Debug.Print("Devices_Hook: Exception occurred during UART0 initialization");
+         return False;
    end Devices_Hook;
 
+   --  ---------------------------------------------------------------------
+   --  PRCTL_Hook: Handles PRCTL system calls.
+   --  ---------------------------------------------------------------------
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
       --  Convert Arg to an Unsigned_64 for write operations.
       Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64(Arg);
@@ -80,8 +90,15 @@ package body Arch.Hooks is
             Debug.Print("PRCTL_Hook: Unsupported code " & Natural'Image(Code));
             return False;
       end case;
+   exception
+      when others =>
+         Debug.Print("PRCTL_Hook: Exception occurred");
+         return False;
    end PRCTL_Hook;
 
+   --  ---------------------------------------------------------------------
+   --  Panic_SMP_Hook: Handles system-wide panic for SMP systems.
+   --  ---------------------------------------------------------------------
    procedure Panic_SMP_Hook is
       --  Obtain the ID of the current hart by reading the mhartid CSR.
       Current_Hart : constant Unsigned_64 := CPU.Read_Hart_ID;
@@ -109,17 +126,27 @@ package body Arch.Hooks is
       --  Halt the current hart (this core halts last).
       Arch.Snippets.HCF;
    exception
-      when Constraint_Error =>
-         Debug.Print("Panic_SMP_Hook: Constraint_Error encountered");
+      when others =>
+         Debug.Print("Panic_SMP_Hook: Exception occurred");
          null;
    end Panic_SMP_Hook;
 
+   --  ---------------------------------------------------------------------
+   --  Get_Active_Core_Count: Returns the number of active cores.
+   --  ---------------------------------------------------------------------
    function Get_Active_Core_Count return Positive is
    begin
       Debug.Print("Arch.Hooks.Get_Active_Core_Count: Getting active core count");
       return Core_Count;
+   exception
+      when others =>
+         Debug.Print("Get_Active_Core_Count: Exception occurred");
+         return 1; -- Default to 1 core in case of an error.
    end Get_Active_Core_Count;
 
+   --  ---------------------------------------------------------------------
+   --  Register_RAM_Files: Registers RAM files.
+   --  ---------------------------------------------------------------------
    procedure Register_RAM_Files is
    begin
       Debug.Print("Register_RAM_Files: Registering RAM files");
@@ -130,6 +157,9 @@ package body Arch.Hooks is
       else
          Lib.Messages.Put_Line("Register_RAM_Files: Errored while loading RAM files");
       end if;
+   exception
+      when others =>
+         Debug.Print("Register_RAM_Files: Exception occurred");
    end Register_RAM_Files;
 
    pragma Inline(Read_TP);
@@ -147,6 +177,10 @@ package body Arch.Hooks is
           Clobber  => "memory",
           Volatile => True);
       return Value;
+   exception
+      when others =>
+         Debug.Print("Read_TP: Exception occurred");
+         return 0; -- Default value in case of an error.
    end Read_TP;
 
    --  --------------------------------------------------------------------
@@ -160,6 +194,10 @@ package body Arch.Hooks is
           Clobber  => "memory",
           Volatile => True);
       return True;
+   exception
+      when others =>
+         Debug.Print("Write_TP: Exception occurred");
+         return False;
    end Write_TP;
 
 end Arch.Hooks;
