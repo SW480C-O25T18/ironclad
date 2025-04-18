@@ -32,7 +32,7 @@ package body Arch.Hooks is
    --  ---------------------------------------------------------------------
    --  This helper function converts an address to an Unsigned_64 type.
    --  ---------------------------------------------------------------------
-   function Address_To_Unsigned_64 is 
+   function Address_To_Unsigned_64 is
       new Ada.Unchecked_Conversion (System.Address, Unsigned_64);
 
    function Read_TP return Unsigned_64;
@@ -45,15 +45,17 @@ package body Arch.Hooks is
    end Devices_Hook;
 
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
-      --  Convert Arg to an Unsigned_64 for write operations. 
+      --  Convert Arg to an Unsigned_64 for write operations.
       Int_Arg : constant Unsigned_64 := Address_To_Unsigned_64 (Arg);
-      --  For read operations, treat Arg as a pointer to Unsigned_64. 
+      --  For read operations, treat Arg as a pointer to Unsigned_64.
       type U64_Ptr is access all Unsigned_64;
-      function Addr_To_U64_Ptr is new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
-      Ptr : U64_Ptr := Addr_To_U64_Ptr (Arg);
+      function Addr_To_U64_Ptr is 
+         new Ada.Unchecked_Conversion (System.Address, U64_Ptr);
+      Ptr : constant U64_Ptr := Addr_To_U64_Ptr (Arg);
    begin
-      Debug.Print ("PRCTL_Hook: Code = " & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
-      case Code is 
+      Debug.Print ("PRCTL_Hook: Code = "
+         & Natural'Image(Code) & ", Arg = " & Unsigned_64'Image(Int_Arg));
+      case Code is
          --  Write new value into tp using inline assembly.
          when 1 => return Write_TP (Int_Arg);
          --  Read value from tp into the memory location pointed to by Arg.
@@ -66,8 +68,8 @@ package body Arch.Hooks is
                   Debug.Print("PRCTL_Hook: Verification successful; Ptr.all =  Value.");
                   return True;
                else
-                  Debug.Print("PRCTL_Hook: Verification failed; Ptr.all: " & 
-                     Unsigned_64'Image(Ptr.all) & 
+                  Debug.Print("PRCTL_Hook: Verification failed; Ptr.all: " &
+                     Unsigned_64'Image(Ptr.all) &
                      " /= Value: " & Unsigned_64'Image(Value));
                   return False;
                end if;
@@ -92,7 +94,7 @@ package body Arch.Hooks is
 
       --  ----------------------------------------------------------------------------
       --  Signal all other harts to enter panic state by sending a software interrupt.
-      --  We iterate over all cores (from 0 to Hart_Count - 1), and for each core 
+      --  We iterate over all cores (from 0 to Hart_Count - 1), and for each core
       --  other than the current one, we trigger a software interrupt using the CLINT.
       --  ----------------------------------------------------------------------------
       for H in 0 .. Hart_Count - 1 loop
@@ -113,7 +115,7 @@ package body Arch.Hooks is
 
       --  ----------------------------------------------------------------------------
       --  Halt the current hart (this core halts last).
-      --  Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current 
+      --  Arch.Snippets.HCF (Halt and Catch Fire) is used here to put the current
       --  core into an unrecoverable halt state.
       --  ----------------------------------------------------------------------------
       Arch.Snippets.HCF;
@@ -144,7 +146,7 @@ package body Arch.Hooks is
          Lib.Messages.Put_Line ("Register_RAM_Files: Errored while loading RAM files");
    end Register_RAM_Files;
 
-   pragma Inline (Read_TP); 
+   pragma Inline (Read_TP);
    pragma Inline (Write_TP);
 
    --  --------------------------------------------------------------------
