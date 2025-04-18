@@ -143,7 +143,8 @@ package body Arch.Entrypoint is
                "Exception occurred during CPU core initialization");
             Lib.Panic.Hard_Panic (
                "CPU core initialization failed");
-
+      end;
+      
       --  7. CLINT config
       begin
          Arch.Debug.Print ("Search for CLINT node in DTB");
