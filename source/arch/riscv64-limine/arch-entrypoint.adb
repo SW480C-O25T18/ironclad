@@ -31,25 +31,41 @@ with Arch.PLIC;
 with Arch.ACPI;
 with Arch.Clocks;
 with Ada.Unchecked_Conversion;
+with Interfaces; use Interfaces;
 
 package body Arch.Entrypoint is
 
-   -- Helper: convert a 64-bit unsigned value into an Integer_Address
+   --  convert a 64-bit unsigned value into an Integer_Address
    function U64_To_Int_Addr is new Ada.Unchecked_Conversion
      (Source => Unsigned_64,
       Target => System.Storage_Elements.Integer_Address);
 
-   -- Helper: convert Unsigned_64 to String
+   --  convert Unsigned_64 to String using Ada.Strings.Fixed
    function Unsigned_To_String (Value : Unsigned_64) return String is
-      package Unsigned_IO is new Ada.Text_IO.Integer_IO (Unsigned_64);
-      Buffer : String (1 .. 20); -- Adjust size as needed
-      Last   : Natural;
+      -- Fixed-length buffer
+      Buffer : String (1 .. 20) := (others => ' ');
+      Index  : Natural := Buffer'Last;
+      Temp   : Unsigned_64 := Value;
    begin
-      Unsigned_IO.Put (Buffer, Value, Last);
-      return Buffer (1 .. Last);
+      -- Convert the number to a string, starting
+      -- from the least significant digit
+      if Temp = 0 then
+         Buffer (Index) := '0';
+         Index := Index - 1;
+      else
+         while Temp > 0 loop
+            Buffer (Index) := Character'Val (
+               Character'Pos ('0') + Integer (Temp mod 10));
+            Temp := Temp / 10;
+            Index := Index - 1;
+         end loop;
+      end if;
+
+      --  Return the resulting string, trimmed to the actual size
+      return Buffer (Index + 1 .. Buffer'Last);
    end Unsigned_To_String;
 
-   -- Centralized exception handler for better debugging
+   --  Centralized exception handler for better debugging
    procedure Handle_Exception (Context : String) is
    begin
       Arch.Debug.Print ("[Error] Exception occurred during " & Context);
@@ -57,7 +73,7 @@ package body Arch.Entrypoint is
    end Handle_Exception;
 
    ------------------------------------------------------------------------
-   -- Bootstrap_Main
+   --  Bootstrap_Main
    ------------------------------------------------------------------------
    procedure Bootstrap_Main is
       Info       : Boot_Information renames Limine.Global_Info;
@@ -67,7 +83,7 @@ package body Arch.Entrypoint is
       PLIC_Node  : DTB_Node_Access;
 
    begin
-      -- UART0 Initialization
+      --  UART0 Initialization
       begin
          Arch.Debug.Print ("[Stage 1] Initializing UART0...");
          if not Devices.UART.Init_UART0 then
@@ -79,7 +95,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("UART0 initialization");
       end;
 
-      -- Limine Protocol Translation
+      --  Limine Protocol Translation
       begin
          Arch.Debug.Print ("[Stage 2] Translating Limine protocol...");
          Limine.Translate_Proto;
@@ -89,7 +105,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Limine protocol translation");
       end;
 
-      -- DTB Initialization
+      --  DTB Initialization
       begin
          Arch.Debug.Print ("[Stage 3] Initializing DTB...");
          if not Arch.DTB.Init then
@@ -103,7 +119,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("DTB initialization");
       end;
 
-      -- Allocators & MMU Initialization
+      --  Allocators & MMU Initialization
       begin
          Arch.Debug.Print ("[Stage 4] Initializing allocators and MMU...");
          Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
@@ -117,7 +133,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Allocator or MMU initialization");
       end;
 
-      -- Logging Initialization
+      --  Logging Initialization
       begin
          Arch.Debug.Print ("[Stage 5] Enabling logging...");
          Lib.Messages.Enable_Logging;
@@ -127,7 +143,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Logging initialization");
       end;
 
-      -- Memory Map Dump
+      --  Memory Map Dump
       begin
          Arch.Debug.Print ("[Stage 6] Dumping physical memory map:");
          for E of Info.Memmap (1 .. Info.Memmap_Len) loop
@@ -143,7 +159,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Memory map dump");
       end;
 
-      -- CPU Initialization
+      --  CPU Initialization
       begin
          Arch.Debug.Print ("[Stage 7] Initializing CPU cores...");
          Arch.CPU.Init_Cores;
@@ -154,7 +170,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("CPU core initialization");
       end;
 
-      -- CLINT Configuration
+      --  CLINT Configuration
       begin
          Arch.Debug.Print ("[Stage 8] Configuring CLINT...");
          CLINT_Node := Find_Node_By_Compatible ("riscv,clint");
@@ -169,7 +185,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("CLINT configuration");
       end;
 
-      -- PLIC Configuration
+      --  PLIC Configuration
       begin
          Arch.Debug.Print ("[Stage 9] Configuring PLIC...");
          PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
@@ -184,7 +200,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("PLIC configuration");
       end;
 
-      -- Trap Handling Configuration
+      --  Trap Handling Configuration
       begin
          Arch.Debug.Print ("[Stage 10] Setting up trap handling...");
          Arch.CPU.Set_Trap_Vector;
@@ -194,7 +210,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Trap handling initialization");
       end;
 
-      -- Interrupts Initialization
+      --  Interrupts Initialization
       begin
          Arch.Debug.Print ("[Stage 11] Initializing interrupts...");
          Arch.Interrupts.Initialize;
@@ -204,7 +220,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Interrupt initialization");
       end;
 
-      -- ACPI Initialization
+      --  ACPI Initialization
       begin
          Arch.Debug.Print ("[Stage 12] Initializing ACPI...");
          declare
@@ -222,7 +238,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("ACPI initialization");
       end;
 
-      -- Clock Sources Initialization
+      --  Clock Sources Initialization
       begin
          Arch.Debug.Print ("[Stage 13] Initializing clock sources...");
          Arch.Clocks.Initialize_Sources;
@@ -232,7 +248,7 @@ package body Arch.Entrypoint is
             Handle_Exception ("Clock sources initialization");
       end;
 
-      -- Command Line & Main Kernel
+      --  Command Line & Main Kernel
       begin
          Arch.Debug.Print ("[Stage 14] Copying command line...");
          Arch.Cmdline_Len := Info.Cmdline_Len;
