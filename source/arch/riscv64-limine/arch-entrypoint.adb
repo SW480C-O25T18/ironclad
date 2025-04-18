@@ -29,6 +29,7 @@ with Main;
 with Arch.Interrupts;
 with Arch.CLINT;
 with Arch.PLIC;
+with Ada.Text_IO;       use Ada.Text_IO;
 with Ada.Unchecked_Conversion;
 
 pragma Warnings (Off);
@@ -49,6 +50,17 @@ package body Arch.Entrypoint is
       Num_Harts  : Unsigned_64;
       CLINT_Node : DTB_Node_Access;
       PLIC_Node  : DTB_Node_Access;
+
+      --  Helper to convert Unsigned_64 to String
+      function Unsigned_To_String (Value : Unsigned_64) return String is
+         package Unsigned_IO is new Ada.Text_IO.Integer_IO (Unsigned_64);
+         Buffer : String (1 .. 20); -- Adjust size as needed
+         Last   : Natural;
+      begin
+         Unsigned_IO.Put (Buffer, Value, Last);
+         return Buffer (1 .. Last);
+      end Unsigned_To_String;
+
    begin
       --  UART0 init
       begin
@@ -121,8 +133,9 @@ package body Arch.Entrypoint is
          for E of Info.Memmap (1 .. Info.Memmap_Len) loop
             Addr := E.Start + E.Length;
             Arch.Debug.Print (
-              "[" & E.Start'Image & " - " & Addr'Image & "] "
-              & Boot_Memory_Type'Image (E.MemType));
+              "[" & Unsigned_To_String (E.Start) & " - " &
+              Unsigned_To_String (Addr) & "] " &
+              Boot_Memory_Type'Image (E.MemType));
          end loop;
       exception
          when others =>
@@ -136,7 +149,7 @@ package body Arch.Entrypoint is
          Arch.CPU.Init_Cores;
          Num_Harts := Unsigned_64 (Arch.CPU.Core_Count);
          Arch.Debug.Print (
-           "CPU cores initialized: " & Unsigned_64'Image (Num_Harts));
+           "CPU cores initialized: " & Unsigned_To_String (Num_Harts));
       exception
          when others =>
             Debug.Print (
@@ -144,7 +157,7 @@ package body Arch.Entrypoint is
             Lib.Panic.Hard_Panic (
                "CPU core initialization failed");
       end;
-      
+
       --  7. CLINT config
       begin
          Arch.Debug.Print ("Search for CLINT node in DTB");
@@ -152,8 +165,7 @@ package body Arch.Entrypoint is
          if CLINT_Node = null then
             CLINT_Node := Find_Node_By_Compatible (
                "riscv,interrupt-controller");
-            Arch.Debug.Print (
-               "CLINT_Node (fallback): ");
+            Arch.Debug.Print ("CLINT_Node (fallback): ");
             Print_DTB_Node (CLINT_Node);
          end if;
          if CLINT_Node /= null then
@@ -190,84 +202,6 @@ package body Arch.Entrypoint is
                "CLINT configuration failed");
       end;
 
-      --  8. PLIC config
-      begin
-         Arch.Debug.Print ("Search for PLIC node in DTB");
-         PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
-         if PLIC_Node = null then
-            PLIC_Node := Find_Node_By_Compatible (
-               "riscv,interrupt-controller");
-            Arch.Debug.Print ("PLIC_Node (fallback): ");
-            Print_DTB_Node (PLIC_Node);
-         end if;
-         if PLIC_Node /= null then
-            Print_DTB_Node (PLIC_Node);
-            declare
-               PLIC_Reg : Unsigned_64_Array :=
-                 Get_Property_Unsigned_64 (PLIC_Node, "reg");
-            begin
-               Arch.Debug.Print ("PLIC_Reg: parsing PLIC node");
-               if PLIC_Reg'Length >= 2 then
-                  Arch.PLIC.Set_PLIC_Configuration (
-                    Base_Address =>
-                    System.Storage_Elements.To_Address (
-                     U64_To_Int_Addr (PLIC_Reg (1))),
-                    Priority_Offset     => Unsigned_64 (0),
-                    Context_Base_Offset => PLIC_Reg (2),
-                    Context_Stride      => Unsigned_64 (16#1000#),
-                    Threshold_Offset    => Unsigned_64 (0),
-                    Max_Interrupt_ID    => Unsigned_64 (1023),
-                    Max_Harts           => Num_Harts,
-                    Contexts_Per_Hart   => Unsigned_64 (1),
-                    Enabled             => True);
-                  Arch.Debug.Print (
-                    "PLIC configured from DTB and SMP info.");
-               else
-                  Arch.Debug.Print (
-                    "PLIC DTB info incomplete; using defaults.");
-                  Arch.PLIC.Set_PLIC_Configuration;
-               end if;
-            end;
-         else
-            Arch.Debug.Print (
-              "PLIC node not found; using defaults.");
-            Arch.PLIC.Set_PLIC_Configuration;
-         end if;
-      exception
-         when others =>
-            Debug.Print (
-               "Exception occurred during PLIC config.");
-            Lib.Panic.Hard_Panic (
-               "PLIC configuration failed");
-      end;
-
-      --  9. Interrupt init
-      begin
-         Arch.Debug.Print (
-           "Initializing interrupt controllers for " &
-           Unsigned_64'Image (Num_Harts) & " cores");
-         Arch.Interrupts.Initialize;
-         Arch.Debug.Print ("Interrupt controllers initialized");
-      exception
-         when others =>
-            Debug.Print (
-               "Exception occurred during interrupt init.");
-            Lib.Panic.Hard_Panic (
-               "Interrupt initialization failed");
-      end;
-
-      --  10. Trap vector
-      begin
-         Arch.Debug.Print ("Setting trap entry vector");
-         Arch.CPU.Set_Trap_Vector;
-      exception
-         when others =>
-            Debug.Print (
-               "Exception occurred while setting trap vector");
-            Lib.Panic.Hard_Panic (
-               "Trap vector setup failed");
-      end;
-
       --  11. Command line & Main
       begin
          Debug.Print ("Copying command line");
@@ -280,8 +214,7 @@ package body Arch.Entrypoint is
       exception
          when others =>
             Debug.Print (
-               "Exception occurred during command"
-               & " line setup or main execution");
+               "Exception occurred during command line setup or main execution");
             Lib.Panic.Hard_Panic (
                "Command line setup or main execution failed");
       end;
