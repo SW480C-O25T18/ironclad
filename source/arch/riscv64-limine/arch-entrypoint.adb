@@ -46,9 +46,9 @@ package body Arch.Entrypoint is
       Target => System.Storage_Elements.Integer_Address);
 
    --  Convert Unsigned_64 to String using Ada.Strings.Fixed
-   function Unsigned_To_String (Value : Unsigned_64) 
+   function Unsigned_To_String (Value : Unsigned_64)
       return String is
-      -- Fixed-length buffer
+      --  Fixed-length buffer
       Buffer : String (1 .. 20) := (others => ' ');
       Index  : Natural := Buffer'Last;
       Temp   : Unsigned_64 := Value;
