@@ -44,8 +44,8 @@ package body Arch.Entrypoint is
 
    --  Convert aa System.Address to Unsigned_64
    function Address_To_U64 is new Ada.Unchecked_Conversion
-  ( Source => System.Address,
-    Target => Unsigned_64 );
+   (Source => System.Address,
+   Target => Unsigned_64 );
 
    --  Convert Unsigned_64 to String
    function Unsigned_To_String (Value : Unsigned_64)
@@ -66,6 +66,27 @@ package body Arch.Entrypoint is
          end loop;
       end if;
       return Buffer;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print (
+            "[Error] Constraint error in Unsigned_To_String");
+         Lib.Panic.Hard_Panic (
+            "Constraint error in Unsigned_To_String");
+      when Program_Error =>
+         Arch.Debug.Print (
+            "[Error] Program error in Unsigned_To_String");
+         Lib.Panic.Hard_Panic (
+            "Program error in Unsigned_To_String");
+      when Storage_Error =>
+         Arch.Debug.Print (
+            "[Error] Storage error in Unsigned_To_String");
+         Lib.Panic.Hard_Panic (
+            "Storage error in Unsigned_To_String");
+      when others =>
+         Arch.Debug.Print (
+            "[Error] Unknown error in Unsigned_To_String");
+         Lib.Panic.Hard_Panic (
+            "Unknown error in Unsigned_To_String");
    end Unsigned_To_String;
 
    --  Centralized exception handler for better debugging
