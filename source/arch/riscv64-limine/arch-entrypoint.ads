@@ -14,7 +14,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces;
+with Interfaces; use Interfaces;
 
 package Arch.Entrypoint is
    --  Convert Unsigned_64 to String using Ada.Strings.Fixed
