@@ -56,9 +56,9 @@ package body Arch.Entrypoint is
       Buffer        : Context_String := (others => ' ');
       I             : Integer        := Buffer'Last;
       N             : Unsigned_64    := Value;
-      constant Overflow_Str : Context_String :=
+      Overflow_Str  : constant Context_String :=
         "Overflow            ";  -- length 20
-      constant Unknown_Str  : Context_String :=
+      Unknown_Str   : constant Context_String :=
         "Unknown Error       ";  -- length 20
    begin
       if N = 0 then
