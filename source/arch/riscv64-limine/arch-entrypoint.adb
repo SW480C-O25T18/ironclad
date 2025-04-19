@@ -66,14 +66,24 @@ package body Arch.Entrypoint is
       end if;
 
       --  Return the resulting string, trimmed to the actual size
-      return Buffer (Index + 1 .. Buffer'Last);
-      exception
-         when Constraint_Error =>
-            --  Handle the case where the number is too large
-            return "Overflow";
-         when others =>
-            --  Handle any other unexpected errors
-            return "Unknown Error";
+      declare
+         Result : String (1 .. Buffer'Length);
+      begin
+         Result := (others => ' ');
+         for I in Result'Range loop
+            if Index + I <= Buffer'Last then
+               Result (I) := Buffer (Index + I);
+            end if;
+         end loop;
+         return Result;
+      end;
+   exception
+      when Constraint_Error =>
+         --  Handle the case where the number is too large
+         return "Overflow";
+      when others =>
+         --  Handle any other unexpected errors
+         return "Unknown Error";
    end Unsigned_To_String;
 
    --  Centralized exception handler for better debugging
