@@ -85,7 +85,7 @@ package body Arch.Entrypoint is
    end Unsigned_To_String;
 
    --  Centralized exception handler for better debugging
-   procedure Handle_Exception (Context : String) is
+   procedure Handle_Exception (Context : Context_String) is
    begin
       Arch.Debug.Print (
          "[Error] Exception occurred during " & Context);
@@ -210,8 +210,8 @@ package body Arch.Entrypoint is
          for E of Info.Memmap (1 .. Info.Memmap_Len) loop
             Addr := E.Start + E.Length;
             Arch.Debug.Print (
-              "[" & Unsigned_To_String (Unsigned_64 (E.Start)) & " - " &
-              Unsigned_To_String (Unsigned_64 (Addr)) & "] " &
+              "[" & Unsigned_To_String (E.Start) & " - " &
+              Unsigned_To_String (Addr) & "] " &
               Boot_Memory_Type'Image (E.MemType));
          end loop;
          Arch.Debug.Print (
