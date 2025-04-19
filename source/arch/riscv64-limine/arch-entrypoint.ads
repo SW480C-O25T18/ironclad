@@ -18,12 +18,12 @@ with Interfaces; use Interfaces;
 
 package Arch.Entrypoint is
    --  Convert Unsigned_64 to String using Ada.Strings.Fixed
-   function Unsigned_To_String (Value : Unsigned_64) return String;
+   subtype Context_String is String (1 .. 1020);
+   function Unsigned_To_String (Value : Unsigned_64) return Context_String;
 
    --  Consolidate Exception Handling to reduce code size
    --  and improve readability.
-   subtype Context_String is String (1 .. 1020);
-   function Unsigned_To_String (Value : Unsigned_64) return Context_String;
+   procedure Handle_Exception (Context : Context_String);
 
    --  This is the entry point for the kernel. It is called by Limine
    --  after the bootloader has loaded the kernel into memory.
