@@ -14,8 +14,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces.C;
-
 pragma Warnings (Off);
 pragma Unreferenced (Interfaces.C);
 
@@ -34,7 +32,8 @@ package body Arch.ACPI with SPARK_Mode => Off is
    function FindTable (Signature : SDT_Signature) return Virtual_Address is
       pragma Unreferenced (Signature);
       --  This function is not implemented in this version.
-      --  It should return the address of the ACPI table with the given signature.
+      --  It should return the address of the ACPI table with the given 
+      --  signature.
       --  For now, we return 0 to indicate that the table was not found.
    begin
       return 0;
