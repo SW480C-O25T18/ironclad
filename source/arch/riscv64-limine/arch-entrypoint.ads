@@ -18,7 +18,7 @@ with Interfaces; use Interfaces;
 
 package Arch.Entrypoint is
    --  Convert Unsigned_64 to String using Ada.Strings.Fixed
-   subtype Context_String is String (1 .. 1020);
+   subtype Context_String is String (1 .. 20);
    function Unsigned_To_String (Value : Unsigned_64) return Context_String;
 
    --  Consolidate Exception Handling to reduce code size

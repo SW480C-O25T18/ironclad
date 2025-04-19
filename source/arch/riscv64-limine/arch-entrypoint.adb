@@ -45,7 +45,7 @@ package body Arch.Entrypoint is
    --  Convert aa System.Address to Unsigned_64
    function Address_To_U64 is new Ada.Unchecked_Conversion
    (Source => System.Address,
-   Target => Unsigned_64 );
+   Target => Unsigned_64);
 
    --  Convert Unsigned_64 to String
    function Unsigned_To_String (Value : Unsigned_64)
