@@ -17,8 +17,6 @@
 
 with System; use System;
 with System.Storage_Elements;
-with System.Storage_Elements.Unsigned_64;
-with System.Storage_Elements.Unsigned_32;
 with Arch.Debug;
 with Devices.UART;
 with Arch.Limine;
