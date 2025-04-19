@@ -15,6 +15,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+with Arch.Snippets;
 with System; use System;
 with System.Storage_Elements;
 with Arch.Debug;
@@ -34,6 +35,8 @@ with Arch.ACPI;
 with Arch.Clocks;
 with Ada.Unchecked_Conversion;
 with Interfaces; use Interfaces;
+with Snippets; use Snippets;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Arch.Entrypoint is
 
@@ -66,6 +69,13 @@ package body Arch.Entrypoint is
 
       --  Return the resulting string, trimmed to the actual size
       return Buffer (Index + 1 .. Buffer'Last);
+      exception
+         when Constraint_Error =>
+            --  Handle the case where the number is too large
+            return "Overflow";
+         when others =>
+            --  Handle any other unexpected errors
+            return "Unknown Error";
    end Unsigned_To_String;
 
    --  Centralized exception handler for better debugging
@@ -73,7 +83,25 @@ package body Arch.Entrypoint is
    begin
       Arch.Debug.Print (
          "[Error] Exception occurred during " & Context);
-      Lib.Panic.Hard_Panic (Context & " failed");
+      Lib.Panic.Hard_Panic (
+         "Exception occurred during " & Context);
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print (
+            "[Error] Constraint error during " & Context);
+         Snippets.HCF;
+      when Program_Error =>
+         Arch.Debug.Print (
+            "[Error] Program error during " & Context);
+         Snippets.HCF;
+      when Storage_Error =>
+         Arch.Debug.Print (
+            "[Error] Storage error during " & Context);
+         Snippets.HCF;
+      when others =>
+         Arch.Debug.Print (
+            "[Error] Unknown error during " & Context);
+         Snippets.HCF;
    end Handle_Exception;
 
    ----------------------------------------------------------------------
