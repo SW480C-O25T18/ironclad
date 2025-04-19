@@ -33,7 +33,6 @@ with Arch.PLIC;
 with Arch.ACPI;
 with Arch.Clocks;
 with Ada.Unchecked_Conversion;
-with Interfaces; use Interfaces;
 with Arch.Snippets; use Arch.Snippets;
 
 package body Arch.Entrypoint is
@@ -43,37 +42,36 @@ package body Arch.Entrypoint is
      (Source => Unsigned_64,
       Target => System.Storage_Elements.Integer_Address);
 
-   --  Convert Unsigned_64 to String using Ada.Strings.Fixed
+   --  Convert Unsigned_64 to String
    function Unsigned_To_String (Value : Unsigned_64)
       return String is
       --  Fixed-length buffer
       Buffer : String (1 .. 20) := (others => ' ');
       Index  : Natural := Buffer'Last;
       Temp   : Unsigned_64 := Value;
+      Result_Length : Natural := 0;
    begin
       --  Convert the number to a string, starting
       --  from the least significant digit
       if Temp = 0 then
          Buffer (Index) := '0';
-         Index := Index - 1;
+         Result_Length := 1;
       else
          while Temp > 0 loop
             Buffer (Index) := Character'Val (
                Character'Pos ('0') + Integer (Temp mod 10));
             Temp := Temp / 10;
             Index := Index - 1;
+            Result_Length := Result_Length + 1;
          end loop;
       end if;
 
-      --  Return the resulting string, trimmed to the actual size
+      --  Construct the result string without slicing
       declare
-         Result : String (1 .. Buffer'Length);
+         Result : String (1 .. Result_Length);
       begin
-         Result := (others => ' ');
-         for I in Result'Range loop
-            if Index + I <= Buffer'Last then
-               Result (I) := Buffer (Index + I);
-            end if;
+         for I in 1 .. Result_Length loop
+            Result (I) := Buffer (Index + I);
          end loop;
          return Result;
       end;
