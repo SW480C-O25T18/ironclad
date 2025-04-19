@@ -15,7 +15,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Arch.Snippets;
 with System; use System;
 with System.Storage_Elements;
 with Arch.Debug;
@@ -35,8 +34,7 @@ with Arch.ACPI;
 with Arch.Clocks;
 with Ada.Unchecked_Conversion;
 with Interfaces; use Interfaces;
-with Snippets; use Snippets;
-with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Arch.Snippets; use Arch.Snippets;
 
 package body Arch.Entrypoint is
 
