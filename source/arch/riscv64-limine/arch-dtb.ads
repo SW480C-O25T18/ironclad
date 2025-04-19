@@ -1,5 +1,6 @@
 --  arch-dtb.ads: Device-tree blob parsing.
 --  Copyright (C) 2024 streaksu
+--  Copyright (C) 2025 scweeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -45,6 +46,9 @@ package Arch.DTB with SPARK_Mode => Off is
       Children    : DTB_Node_Access_Array;
       Child_Count : Natural := 0;
    end record;
+
+   --  Root node of the device tree
+   Root_Node : DTB_Node_Access;
 
    function Init return Boolean;
    procedure Print_DTB_Node (Node   : DTB_Node_Access;

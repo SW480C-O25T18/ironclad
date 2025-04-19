@@ -1,5 +1,6 @@
 --  arch-dtb.adb: Device-tree blob parsing.
 --  Copyright (C) 2024 streaksu
+--  Copyright (C) 2025 scweeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -83,7 +84,6 @@ package body Arch.DTB with SPARK_Mode => Off is
    -- Global Variables for DTB Storage
    ------------------------------------------------------------------------------
    DTB_End      : System.Address := System.Null_Address;
-   Root_Node    : DTB_Node_Access := null;
    Struct_Base  : System.Address := System.Null_Address;
    Strings_Base : System.Address := System.Null_Address;
 
@@ -213,7 +213,6 @@ package body Arch.DTB with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    -- Global Variables for Parsed DTB and Base Addresses
    ------------------------------------------------------------------------------
-   Root_Node    : DTB_Node_Access := null;
    Struct_Base  : System.Address := System.Null_Address;
    Strings_Base : System.Address := System.Null_Address;
 
