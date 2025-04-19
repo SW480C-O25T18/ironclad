@@ -87,7 +87,7 @@ package body Arch.Entrypoint is
    ----------------------------------------------------------------------
    --  Centralized exception handler for better debugging
    ----------------------------------------------------------------------
-   procedure Handle_Exception (Context : Error_String) is
+   procedure Handle_Exception (Context : String) is
    begin
       Arch.Debug.Print (
          "[Error] Exception occurred during " & Context
