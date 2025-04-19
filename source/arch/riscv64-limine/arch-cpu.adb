@@ -19,7 +19,7 @@ with System;                 use System;
 with System.Machine_Code;    use System.Machine_Code;
 with Lib.Messages;
 with Lib.Panic;
-with Limine;                 use Limine;
+with Arch.Limine;            use Arch.Limine;
 with Ada.Unchecked_Conversion;
 with Arch.Interrupts;        use Arch.Interrupts;
 
