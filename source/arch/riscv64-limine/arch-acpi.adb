@@ -31,7 +31,7 @@ package body Arch.ACPI with SPARK_Mode => Off is
    function FindTable (Signature : SDT_Signature) return Virtual_Address is
       pragma Unreferenced (Signature);
       --  This function is not implemented in this version.
-      --  It should return the address of the ACPI table with the given 
+      --  It should return the address of the ACPI table with the given
       --  signature.
       --  For now, we return 0 to indicate that the table was not found.
    begin
