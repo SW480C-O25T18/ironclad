@@ -23,9 +23,8 @@ package Arch.Entrypoint is
    --  Consolidate Exception Handling to reduce code size
    --  and improve readability.
    subtype Context_String is String (1 .. 1020);
-   procedure Handle_Exception (Context : Context_String)
-       with Export, Convention => C, External_Name => "handle_exception";
-   
+   function Unsigned_To_String (Value : Unsigned_64) return Context_String;
+
    --  This is the entry point for the kernel. It is called by Limine
    --  after the bootloader has loaded the kernel into memory.
    procedure Bootstrap_Main

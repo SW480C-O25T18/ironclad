@@ -44,44 +44,23 @@ package body Arch.Entrypoint is
 
    --  Convert Unsigned_64 to String
    function Unsigned_To_String (Value : Unsigned_64)
-      return String is
+      return Context_String is
       --  Fixed-length buffer
-      Buffer : String (1 .. 20) := (others => ' ');
-      Index  : Natural := Buffer'Last;
-      Temp   : Unsigned_64 := Value;
-      Result_Length : Natural := 0;
+      Buffer : Context_String := (others => ' ');
+      I      : Integer   := Buffer'Last;
+      N      : Unsigned_64 := Value;
    begin
-      --  Convert the number to a string, starting
-      --  from the least significant digit
-      if Temp = 0 then
-         Buffer (Index) := '0';
-         Result_Length := 1;
+      if N = 0 then
+         Buffer (I) := '0';
       else
-         while Temp > 0 loop
-            Buffer (Index) := Character'Val (
-               Character'Pos ('0') + Integer (Temp mod 10));
-            Temp := Temp / 10;
-            Index := Index - 1;
-            Result_Length := Result_Length + 1;
+         while N > 0 loop
+            Buffer (I) := Character'Val
+            (Character'Pos ('0') + Integer (N mod 10));
+            N := N / 10;
+            I := I - 1;
          end loop;
       end if;
-
-      --  Construct the result string without slicing
-      declare
-         Result : String (1 .. Result_Length);
-      begin
-         for I in 1 .. Result_Length loop
-            Result (I) := Buffer (Index + I);
-         end loop;
-         return Result;
-      end;
-   exception
-      when Constraint_Error =>
-         --  Handle the case where the number is too large
-         return "Overflow";
-      when others =>
-         --  Handle any other unexpected errors
-         return "Unknown Error";
+      return Buffer;
    end Unsigned_To_String;
 
    --  Centralized exception handler for better debugging
