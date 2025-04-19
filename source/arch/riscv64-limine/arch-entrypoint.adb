@@ -51,44 +51,37 @@ package body Arch.Entrypoint is
 
    --  Convert Unsigned_64 to String (fixed-length)
    function Unsigned_To_String (Value : Unsigned_64)
-      return Context_String
+     return Context_String
    is
-      Buffer        : Context_String := (others => ' ');
-      I             : Integer        := Buffer'Last;
-      N             : Unsigned_64    := Value;
-      Overflow_Str  : constant Context_String :=
-        "Overflow            ";  -- length 20
-      Unknown_Str   : constant Context_String :=
-        "Unknown Error       ";  -- length 20
+      Buffer : Context_String := (others => ' ');
+      I      : Integer        := Buffer'Last;
+      N      : Unsigned_64    := Value;
    begin
       if N = 0 then
          Buffer (I) := '0';
       else
          while N > 0 loop
             Buffer (I) := Character'Val
-              ( Character'Pos ('0') + Integer (N mod 10) );
+                           (Character'Pos('0') + Integer(N mod 10));
             N := N / 10;
             I := I - 1;
          end loop;
       end if;
+
       return Buffer;
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("[Error] Constraint error in Unsigned_To_String");
          Lib.Panic.Hard_Panic ("Constraint error in Unsigned_To_String");
-         return Overflow_Str;
       when Program_Error =>
          Arch.Debug.Print ("[Error] Program error in Unsigned_To_String");
          Lib.Panic.Hard_Panic ("Program error in Unsigned_To_String");
-         return Unknown_Str;
       when Storage_Error =>
          Arch.Debug.Print ("[Error] Storage error in Unsigned_To_String");
          Lib.Panic.Hard_Panic ("Storage error in Unsigned_To_String");
-         return Unknown_Str;
       when others =>
          Arch.Debug.Print ("[Error] Unknown error in Unsigned_To_String");
          Lib.Panic.Hard_Panic ("Unknown error in Unsigned_To_String");
-         return Unknown_Str;
    end Unsigned_To_String;
 
    ----------------------------------------------------------------------
