@@ -16,6 +16,7 @@
 
 with Arch.Debug;
 with System; use System;
+with System.Machine_Code; use System.Machine_Code;
 with Lib.Messages;
 with Lib.Panic;
 
@@ -134,7 +135,7 @@ package body Arch.CPU with SPARK_Mode => Off is
    procedure Set_Trap_Vector is
    begin
       -- Write the address of trap_entry into the stvec CSR.
-      System.Machine_Code.Asm("csrw stvec, %0", 
+      Asm("csrw stvec, %0", 
          Inputs   => Unsigned_64'Asm_Input("r", trap_entry'Address),
          Volatile => True);
    end Set_Trap_Vector;

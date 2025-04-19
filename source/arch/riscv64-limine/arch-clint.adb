@@ -17,7 +17,6 @@
 with Arch.CLINT;
 with System;
 with Interfaces; use Interfaces;
-with Ada.Assertions;         -- For contract checking
 with System.Machine_Code;    -- For inline assembly fence
 with Arch.Debug;             -- For debug printing
 
@@ -156,6 +155,10 @@ package body Arch.CLINT with SPARK_Mode => off is
    --  Volatile Register Access: Define a volatile type.
    --  Used for memory-mapped register accesses.
    ------------------------------------------------------------------------------
+   function Address_To_U64 is new Ada.Unchecked_Conversion
+     ( Source => System.Address,
+       Target => Unsigned_64
+     );
    -- Volatile register type
    type Reg_Type is new Unsigned_64;
    pragma Volatile (Reg_Type);
@@ -165,7 +168,7 @@ package body Arch.CLINT with SPARK_Mode => off is
    -- System address access conversion to volatile register pointer
    function Reg (Abs_Addr : System.Address) return Reg_Ptr is
    begin
-      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
+      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(Address_To_U64 (Abs_Addr)));
       Arch.Debug.Print("Reg: Address End");
       return Reg_Ptr(Abs_Addr);
    end Reg;

@@ -70,14 +70,14 @@ package body Arch.Snippets is
            Outputs  => Unsigned_64'Asm_Output ("=r", Value),
            Clobber  => "memory",
            Volatile => True);
-      Debug.Print ("Read_SStatus: SStatus = ", To_String(Value));
+      Debug.Print ("Read_SStatus: SStatus = " & Unsigned_64'Image(Value));
       Debug.Print ("Read_SStatus: SStatus read");
       return Value;
    end Read_SStatus;
 
    procedure Write_SStatus (Value : Unsigned_64) is
    begin
-      Debug.Print ("Write_SStatus: Writing SStatus = ", To_String(Value));
+      Debug.Print ("Write_SStatus: SStatus = " & Unsigned_64'Image(Value));
       Asm ("csrw sstatus, %0",
            Inputs   => Unsigned_64'Asm_Input ("r", Value),
            Clobber  => "memory",
