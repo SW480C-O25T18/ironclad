@@ -18,7 +18,7 @@
 with System; use System;
 with System.Storage_Elements;
 with Arch.Debug;
-with Devices.UART;
+with Arch.Hooks;
 with Arch.Limine;
 with Lib.Messages;      use Lib.Messages;
 with Memory.Physical;
@@ -131,7 +131,7 @@ package body Arch.Entrypoint is
       -- UART0 Initialization
       begin
          Arch.Debug.Print ("[Stage 1] Initializing UART0...");
-         if not Devices.UART.Init_UART0 then
+         if not Arch.Hooks.Devices_Hook then
             Lib.Panic.Hard_Panic ("UART0 initialization failed");
          end if;
          Arch.Debug.Print ("[Stage 1] UART0 initialized successfully");
