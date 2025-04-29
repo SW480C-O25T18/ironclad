@@ -15,6 +15,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Devices.UART;
+with Arch.Debug;
 with Arch.Snippets;
 with Arch.CPU; use Arch.CPU;
 --with Arch.APIC;
@@ -27,6 +28,7 @@ with Arch.Limine;
 package body Arch.Hooks is
    function Devices_Hook return Boolean is
    begin
+      Debug.Print ("Initializing UART0");
       return Devices.UART.Init_UART0;
    end Devices_Hook;
 
@@ -45,13 +47,16 @@ package body Arch.Hooks is
 
    function Get_Active_Core_Count return Positive is
    begin
+      Debug.Print ("Getting active core count");
       return Core_Count;
    end Get_Active_Core_Count;
 
    procedure Register_RAM_Files is
    begin
+   Debug.Print ("Registering RAM files");
       if not Devices.Ramdev.Init
-         (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len))
+         (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len), 
+         Debug.Print("RAM files loaded"))
       then
          Lib.Messages.Put_Line ("Could not load RAM files");
       end if;
