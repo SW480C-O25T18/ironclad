@@ -40,7 +40,7 @@ package Arch.MMU is
 
    --  Types to represent page tables.
    type Page_Table     is private;
-   type Page_Table_Acc is access Page_Table;
+   type Page_Table_Acc is access all Page_Table;
 
    --  Default minimum page size supported by the MMU. Ports may use bigger
    --  pages optionally if possible for optimization, but this size is always
@@ -207,7 +207,6 @@ package Arch.MMU is
    procedure Get_Statistics (Stats : out Virtual_Statistics);
 
 private
-
    #if ArchName = "riscv64-limine"
 
       type Bit is mod 2**1 with Size => 1;
@@ -282,16 +281,14 @@ private
       end record with size => 64;
 
       For Satp_Register use record
-         Sv_Type: at 0 range 60 ..63;
-         ASID: at 0 range 44 .. 59;
-         PPN: at 0 range 0 .. 43;
+         Sv_Type at 0 range 60 ..63;
+         ASID at 0 range 44 .. 59;
+         PPN at 0 range 0 .. 43;
       end record;
 
-      function Extract_Satp_Data: (Addr : u64) return Satp_Register;
+      function Extract_Satp_Data (Addr : u64) return Satp_Register;
       function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address;
       function Combine_Satp_Data(S : Satp_Register) return Unsigned_64;
-
-   #end if;
 
    #elsif ArchName = """x86_64-limine"""
       type PML4 is array (1 .. 512) of Unsigned_64 with Size => 512 * 64;
@@ -333,5 +330,10 @@ private
          (Perm    : Page_Permissions;
           Caching : Caching_Model) return Unsigned_64;
       procedure Flush_Global_TLBs (Addr : System.Address; Len : Storage_Count);
+   
+   #else 
+     type Page_Table is record
+         Mutex           : aliased Lib.Synchronization.Readers_Writer_Lock;
+      end record;
    #end if;
 end Arch.MMU;
