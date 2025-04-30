@@ -39,12 +39,12 @@ package body Arch.Entrypoint is
 
       Lib.Messages.Put_Line ("Hello");
 
-      declare
-         Received_Line : String (1 .. 100);
-      begin
-         Devices.UART.Read_UART0_Line(Received_Line);
-         Lib.Messages.Put_Line(Received_Line);
-      end;
+      --  declare
+      --     Received_Line : String (1 .. 100);
+      --  begin
+      --     Devices.UART.Read_UART0_Line(Received_Line);
+      --     Lib.Messages.Put_Line(Received_Line);
+      --  end;
 
       --  Translate the limine protocol into arch-agnostic structures.
       Limine.Translate_Proto;
