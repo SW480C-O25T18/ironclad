@@ -25,13 +25,65 @@ with System;              use System;
 with System.Machine_Code;  use System.Machine_Code;
 with Memory.Physical;     use Memory.Physical;
 with Ada.Unchecked_Conversion;
-with Memory.Utils;
 with Arch.CPU;            use Arch.CPU;
 with Arch.Local;          use Arch.Local;
 with Arch.Interrupts;     use Arch.Interrupts;
 with Arch.Snippets;       use Arch.Snippets;
 
 package body Arch.Context is
+
+   ----------------------------------------------------------------------------
+   --  Quick, in-place implementations of what Memory.Utils would have provided
+   ----------------------------------------------------------------------------
+
+   --  Convert a System.Address to an unsigned 64-bit integer
+   function Addr_To_U64 (A : System.Address) return Interfaces.Unsigned_64 is
+      function To_U64 is new Ada.Unchecked_Conversion(
+         Source => System.Address,
+         Target => Interfaces.Unsigned_64
+      );
+   begin
+      return To_U64 (A);
+   end Addr_To_U64;
+
+   --  Convert a 64-bit integer back to an Address
+   function U64_To_Addr (V : Interfaces.Unsigned_64) return System.Address is
+      function To_Addr is new Ada.Unchecked_Conversion(
+         Source => Interfaces.Unsigned_64,
+         Target => System.Address
+      );
+   begin
+      return To_Addr (V);
+   end U64_To_Addr;
+
+   --  Write “Len” bytes of value “B” starting at address “Base”
+   procedure Set_Memory (
+     Base : System.Address;
+     Len  : System.Storage_Elements.Integer_Address;
+     B    : Interfaces.Unsigned_8
+   ) is
+      -- build a byte-pointer to Base
+      type Byte_Ptr is access all Interfaces.Unsigned_8;
+      function To_Byte_Ptr is new Ada.Unchecked_Conversion(
+         Source => System.Address,
+         Target => Byte_Ptr
+      );
+      P : Byte_Ptr := To_Byte_Ptr (Base);
+   begin
+      for I in 0 .. Len - 1 loop
+         P (I) := B;
+      end loop;
+   end Set_Memory;
+
+   --  “Free” is a no-op for context buffers
+   procedure Free_Memory (
+     Base : System.Address;
+     Len  : System.Storage_Elements.Integer_Address
+   ) is
+   begin
+      null;
+   end Free_Memory;
+
    --  forward declarations so Setup_FP_Routines can see them
    procedure FP_Save_NoOp    (Ctx : in out FP_Context);
    procedure FP_Load_NoOp    (Ctx :     FP_Context);
@@ -50,14 +102,6 @@ package body Arch.Context is
            Volatile => True);
       return Value;
    end Read_MISA;
-
-   --  Convert between System.Address and Unsigned_64
-   function Addr_To_U64 is new Ada.Unchecked_Conversion (
-     Source => System.Address,
-     Target => Unsigned_64);
-   function U64_To_Addr is new Ada.Unchecked_Conversion (
-     Source => Unsigned_64,
-     Target => System.Address);
 
    --  MISA extension bits and SSTATUS mask
    MISA_Value       : constant Unsigned_64 := Read_MISA;
@@ -183,7 +227,7 @@ package body Arch.Context is
    --  Destroy FP context
    procedure Destroy_FP_Context (Ctx : in out FP_Context) is
    begin
-      Free (Ctx);
+      Free_Memory (Ctx);
       Ctx := System.Null_Address;
    end Destroy_FP_Context;
 
@@ -201,7 +245,7 @@ package body Arch.Context is
    procedure Save_FP_Context_F (Ctx : in out FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0..31 loop
+      for Reg in 0 .. 31 loop
          Machine_Code.Asm (
            "fsw f" & Reg'Image & ", " &
            Integer'Image (Reg * 4) & "(%0)",
@@ -214,7 +258,7 @@ package body Arch.Context is
    procedure Load_FP_Context_F (Ctx : FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0..31 loop
+      for Reg in 0 .. 31 loop
          Machine_Code.Asm (
            "flw f" & Reg'Image & ", " &
            Integer'Image (Reg * 4) & "(%0)",
@@ -228,7 +272,7 @@ package body Arch.Context is
    procedure Save_FP_Context_D (Ctx : in out FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0..31 loop
+      for Reg in 0 .. 31 loop
          Machine_Code.Asm (
            "fsd f" & Reg'Image & ", " &
            Integer'Image (Reg * 8) & "(%0)",
@@ -241,7 +285,7 @@ package body Arch.Context is
    procedure Load_FP_Context_D (Ctx : FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0..31 loop
+      for Reg in 0 .. 31 loop
          Machine_Code.Asm (
            "fld f" & Reg'Image & ", " &
            Integer'Image (Reg * 8) & "(%0)",

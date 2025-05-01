@@ -107,14 +107,20 @@ package body Arch.CLINT with SPARK_Mode => Off is
    procedure Memory_Barrier is
    begin
       Arch.Debug.Print ("Memory barrier Start");
-      Machine_Code.FENCE;
+      System.Machine_Code.Atomic_Load_Store(
+         Atomic_Operation => System.Machine_Code.Fence,
+         Address          => System.Null_Address,
+         Value            => 0,
+         Size             => 0
+      );
       Arch.Debug.Print ("Memory barrier End");
    end Memory_Barrier;
 
    procedure Set_Software_Interrupt (
       Hart_ID : Unsigned_64;
       Value   : Boolean
-   ) is
+   )
+   is
       type MSIP_Type is new Unsigned_32;
       pragma Volatile (MSIP_Type);
       type MSIP_Ptr is access all MSIP_Type;
@@ -123,11 +129,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Source => System.Address,
          Target => MSIP_Ptr
       );
-      Addr : constant System.Address :=
-         Get_CLINT_Base
-         + To_Address (
-            Storage_Elements.Integer_Address(
-               Get_MSIP_Offset + Hart_ID * 4));
+      Base_Int : constant Storage_Elements.Integer_Address :=
+        Storage_Elements.Integer_Address (Get_CLINT_Base);
+      Offset   : constant Storage_Elements.Integer_Address :=
+        Base_Int + Storage_Elements.Integer_Address
+           (Get_MSIP_Offset + Hart_ID * 4);
+      Addr     : constant System.Address := To_Address (Offset);
       MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr(Addr);
    begin
       if not CLINT_Enabled then
@@ -157,11 +164,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Source => System.Address,
          Target => MSIP_Ptr
       );
-      Addr : constant System.Address :=
-         Get_CLINT_Base
-         + To_Address (
-            Storage_Elements.Integer_Address(
-               Get_MSIP_Offset + Hart_ID * 4));
+      Base_Int : constant Storage_Elements.Integer_Address :=
+        Storage_Elements.Integer_Address (Get_CLINT_Base);
+      Offset   : constant Storage_Elements.Integer_Address :=
+        Base_Int + Storage_Elements.Integer_Address
+           (Get_MSIP_Offset + Hart_ID * 4);
+      Addr     : constant System.Address := To_Address (Offset);
       MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
    begin
       if not CLINT_Enabled then
@@ -179,12 +187,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Source => System.Address,
          Target => Time_Ptr
       );
-      Addr : constant Address :=
-         Get_CLINT_Base
-            + To_Address(
-               Storage_Elements.Integer_Address (
-                  Get_MSIP_Offset + Hart_ID * 4)
-               );
+      Base_Int : constant Storage_Elements.Integer_Address :=
+        Storage_Elements.Integer_Address (Get_CLINT_Base);
+      Offset   : constant Storage_Elements.Integer_Address :=
+        Base_Int + Storage_Elements.Integer_Address
+           (Get_MSIP_Offset + Hart_ID * 4);
+      Addr     : constant System.Address := To_Address (Offset);
       Time_Reg : Time_Ptr := To_Time_Ptr (Addr);
    begin
       if not CLINT_Enabled then
@@ -200,9 +208,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
       type Time_Type is new Unsigned_64;
       pragma Volatile (Time_Type);
       type Time_Ptr is access all Time_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base
-         + To_Address (Get_MTimecmp_Offset + Hart_ID * 8);
+      Base_Int : constant Storage_Elements.Integer_Address :=
+        Storage_Elements.Integer_Address (Get_CLINT_Base);
+      Offset   : constant Storage_Elements.Integer_Address :=
+        Base_Int + Storage_Elements.Integer_Address
+           (Get_MTimecmp_Offset + Hart_ID * 8);
+      Addr     : constant System.Address := To_Address (Offset);
       Time_Reg : Time_Ptr := Time_Ptr (Addr);
    begin
       if not CLINT_Enabled then
@@ -218,9 +229,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
       type Time_Type is new Unsigned_64;
       pragma Volatile (Time_Type);
       type Time_Ptr is access all Time_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base
-         + To_Address (Get_MTimecmp_Offset + Hart_ID * 8);
+      Base_Int : constant Storage_Elements.Integer_Address :=
+        Storage_Elements.Integer_Address (Get_CLINT_Base);
+      Offset   : constant Storage_Elements.Integer_Address :=
+        Base_Int + Storage_Elements.Integer_Address
+           (Get_MTimecmp_Offset + Hart_ID * 8);
+      Addr     : constant System.Address := To_Address (Offset);
       Time_Reg : Time_Ptr := Time_Ptr (Addr);
    begin
       if not CLINT_Enabled then
