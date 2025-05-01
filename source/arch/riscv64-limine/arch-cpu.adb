@@ -41,12 +41,7 @@ package body Arch.CPU with SPARK_Mode => Off is
    -------------------------------------------------------------------
    --  SMP_Request: tell Limine we want SMP info.
    -------------------------------------------------------------------
-   SMP_Request : Limine.SMP_Request :=
-     (Base =>
-        (ID       => Limine.SMP_ID,
-         Revision => 0,
-         Response => Null_Address),
-      Flags => 0)
+   SMP_Request : Limine.SMP_Request
       with Export, Async_Writers;
 
    -------------------------------------------------------------------
@@ -57,6 +52,11 @@ package body Arch.CPU with SPARK_Mode => Off is
       Idx         : Natural := 2;
       Response    : Limine.RISCV64_SMP_Response;
    begin
+      SMP_Request.Base.ID       := Limine.SMP_ID;
+      SMP_Request.Base.Revision := 0;
+      SMP_Request.Base.Response := Null_Address;
+      SMP_Request.Flags         := 0;
+      
       Debug.Print ("Sending SMP request to Limine");
       if SMP_Request.Base.Response = Null_Address then
          Lib.Panic.Hard_Panic ("Limine SMP request needed");
