@@ -56,11 +56,125 @@ package body Arch.MMU is
    end Combine_Satp_Data;
 
 
-   function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
-      pragma Unreferenced (Memmap);
-   begin
-      return True;
-   end Init;
+ ------------------------------------------------------------------
+--  RISC-V Sv39  kernel-space page-table initialiser
+--  (assumes 4 KiB pages, 3-level page table, direct-map window
+--   at Memory_Offset, and a helper Inner_Map_Range that fills
+--   leaf PTEs using the Page_Table_Entry record).
+------------------------------------------------------------------
+function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
+
+   --  1. Pre-made permission sets, expressed in our Ada record type
+   RW_Flags : constant Page_Permissions :=
+      (Is_User_Accesible => False,
+       Can_Read          => True,
+       Can_Write         => True,
+       Can_Execute       => False,
+       Is_Global         => True);
+
+   RX_Flags : constant Page_Permissions :=
+      (Is_User_Accesible => False,
+       Can_Read          => True,
+       Can_Write         => False,
+       Can_Execute       => True,
+       Is_Global         => True);
+
+   R_Flags  : constant Page_Permissions :=
+      (Is_User_Accesible => False,
+       Can_Read          => True,
+       Can_Write         => False,
+       Can_Execute       => False,
+       Is_Global         => True);
+
+   ----------------------------------------------------------------
+   --  2. Linker symbols that delimit kernel segments
+   ----------------------------------------------------------------
+   text_start, text_end,
+   rodata_start, rodata_end,
+   data_start,  data_end : Character
+     with Import, Convention => C;
+
+   TSAddr : constant Integer_Address := To_Integer (text_start'Address);
+   OSAddr : constant Integer_Address := To_Integer (rodata_start'Address);
+   DSAddr : constant Integer_Address := To_Integer (data_start'Address);
+
+   --  Physical load address as supplied by the boot loader / SBI
+   Phys : constant Integer_Address := To_Integer (Boot_Info.Get_Load_Phys);
+begin
+   ----------------------------------------------------------------
+   --  3. Allocate an empty three-level page table
+   ----------------------------------------------------------------
+   MMU.Kernel_Table := new Page_Table'
+     (Root               => 0,
+      Page_Level         => 1,
+      Page_Table_Entries => new Page_Level'(others => (others => 0)),
+      Mutex              => Lib.Synchronization.Unlocked_RW_Lock);
+
+   ----------------------------------------------------------------
+   --  4. Identity-map every boot-reported usable RAM region
+   --     into the “higher-half” window (direct-map).
+   ----------------------------------------------------------------
+   for E of Memmap loop
+      if not Inner_Map_Range
+         (Map            => Kernel_Table,
+          Physical_Start => To_Address (To_Integer (E.Start)),
+          Virtual_Start  => To_Address (To_Integer (E.Start) + Memory_Offset),
+          Length         => Storage_Offset (E.Length),
+          Permissions    => RW_Flags,          -- R/W, no execute
+          Caching        => Write_Back)
+      then
+         return False;
+      end if;
+   end loop;
+
+   ----------------------------------------------------------------
+   --  5. Map the kernel image itself with fine-grained permissions
+   ----------------------------------------------------------------
+   if not Inner_Map_Range
+        (Map            => Kernel_Table,
+         Physical_Start => To_Address (TSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => text_start'Address,
+         Length         => text_end'Address - text_start'Address,
+         Permissions    => RX_Flags,
+         Caching        => Write_Back)
+      or else
+      not Inner_Map_Range
+        (Map            => Kernel_Table,
+         Physical_Start => To_Address (OSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => rodata_start'Address,
+         Length         => rodata_end'Address - rodata_start'Address,
+         Permissions    => R_Flags,
+         Caching        => Write_Back)
+      or else
+      not Inner_Map_Range
+        (Map            => Kernel_Table,
+         Physical_Start => To_Address (DSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => data_start'Address,
+         Length         => data_end'Address - data_start'Address,
+         Permissions    => RW_Flags,
+         Caching        => Write_Back)
+   then
+      return False;
+   end if;
+
+   ----------------------------------------------------------------
+   --  6. Book-keeping: total bytes of the linked kernel image
+   ----------------------------------------------------------------
+   Global_Kernel_Usage :=
+       Memory.Size (text_end'Address   - text_start'Address)
+     + Memory.Size (rodata_end'Address - rodata_start'Address)
+     + Memory.Size (data_end'Address   - data_start'Address);
+
+   ----------------------------------------------------------------
+   --  7. Activate the new table: MODE=8 (Sv39), ASID=0
+   ----------------------------------------------------------------
+   return Make_Active (Kernel_Table);
+
+exception
+   when Constraint_Error =>
+      return False;
+end Init;
+
 
       function Inner_Map_Range
    (Map            : Page_Table_Acc;
@@ -295,27 +409,53 @@ package body Arch.MMU is
          --  In case of any pointer issues, just return quietly (or raise an error).
          return;
    end Destroy_Table;
+-----------------------------------------------------------------
+--  Install Map as the current address space (Sv39, ASID unchanged).
+--  Returns True on success, False if any address arithmetic traps.
+-----------------------------------------------------------------
+function Make_Active (Map : Page_Table_Acc) return Boolean is
+   Physical_Addr : Unsigned_64;
+   Satp_Content  : Satp_Register;
+   New_PPN       : U44;
+   New_SATP      : Unsigned_64;
+begin
+   ----------------------------------------------------------------
+   --  1. Kernel VA → physical → PPN
+   ----------------------------------------------------------------
+   Physical_Addr :=
+     Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address)
+                  - Memory.Memory_Offset);
 
-   function Make_Active (Map : Page_Table_Acc) return Boolean is
-      Physical_Addr : Unsigned_64;
-      Satp_Content : Satp_Register;
-      New_PPN : U44;
-      New_SATP : Satp_Register;
-   begin
-      Physical_Addr := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory.Memory_Offset);
-      Satp_Content := Arch.Snippets.Read_SATP;
-      
-      New_PPN := U44(Physical_Addr / 4096);
-      if Satp_Content.PPN /= New_PPN then
-         Satp_Content.PPN := New_PPN;
-         New_SATP := Combine_Satp_Data (Satp_Content);
-         Arch.Snippets.Write_SATP (New_SATP);
-      end if;
+   New_PPN := U44 (Physical_Addr / 4096);  --  >> 12
+
+   ----------------------------------------------------------------
+   --  2. Read current SATP (keeps MODE and ASID intact)
+   ----------------------------------------------------------------
+   Satp_Content := Arch.Snippets.Read_SATP;
+
+   ----------------------------------------------------------------
+   --  3. If PPN already matches, nothing to do
+   ----------------------------------------------------------------
+   if Satp_Content.PPN = New_PPN then
       return True;
-   exception
-      when Constraint_Error =>
-         return False;
-   end Make_Active;
+   end if;
+
+   ----------------------------------------------------------------
+   --  4. Update only the PPN and write back
+   ----------------------------------------------------------------
+   Satp_Content.PPN := New_PPN;
+   New_SATP := Combine_Satp_Data (Satp_Content);
+
+   Arch.Snippets.Write_SATP (New_SATP);
+   Arch.Snippets.SFence_VMA_All;   -- flush stale TLB entries
+
+   return True;
+
+exception
+   when Constraint_Error =>
+      return False;
+end Make_Active;
+
 
    procedure Translate_Address
       (Map                : Page_Table_Acc;
