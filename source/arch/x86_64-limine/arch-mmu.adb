@@ -40,97 +40,135 @@ package body Arch.MMU is
    Global_Table_Usage  : Memory.Size := 0;
 
    function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
+
+      --  We define some convenient sets of page-permission flags:
+      --   - NX_Flags: Can read/write but cannot execute.
+      --   - RX_Flags: Can read/execute but not write.
+      --   - R_Flags:  Can read only.
+
       NX_Flags : constant Page_Permissions :=
          (Is_User_Accesible => False,
-          Can_Read          => True,
-          Can_Write         => True,
-          Can_Execute       => False,
-          Is_Global         => True);
+         Can_Read          => True,
+         Can_Write         => True,
+         Can_Execute       => False,
+         Is_Global         => True);
+
       RX_Flags : constant Page_Permissions :=
          (Is_User_Accesible => False,
-          Can_Read          => True,
-          Can_Write         => False,
-          Can_Execute       => True,
-          Is_Global         => True);
+         Can_Read          => True,
+         Can_Write         => False,
+         Can_Execute       => True,
+         Is_Global         => True);
+
       R_Flags : constant Page_Permissions :=
          (Is_User_Accesible => False,
-          Can_Read          => True,
-          Can_Write         => False,
-          Can_Execute       => False,
-          Is_Global         => True);
+         Can_Read          => True,
+         Can_Write         => False,
+         Can_Execute       => False,
+         Is_Global         => True);
 
-      --  Start of sections for correct permission loading.
+      --  The kernel linker typically provides symbols that mark:
+      --   * text_start/text_end:   Start/end of the executable code section
+      --   * rodata_start/rodata_end: Start/end of the read-only data section
+      --   * data_start/data_end:   Start/end of the read/write data section
+      --
+      --  These addresses come from the linker script or the build system so that
+      --  the kernel knows where code vs. read-only data vs. read/write data reside.
+
       text_start   : Character with Import, Convention => C;
       text_end     : Character with Import, Convention => C;
       rodata_start : Character with Import, Convention => C;
       rodata_end   : Character with Import, Convention => C;
       data_start   : Character with Import, Convention => C;
       data_end     : Character with Import, Convention => C;
+
+      --  Convert those linker-symbol addresses to integer form.
       TSAddr : constant Integer_Address := To_Integer (text_start'Address);
       OSAddr : constant Integer_Address := To_Integer (rodata_start'Address);
       DSAddr : constant Integer_Address := To_Integer (data_start'Address);
+
+      --  Phys is some base physical address. On x86_64-limine, this might
+      --  be the load address or an address from the limine boot protocol.
       Phys   : constant Integer_Address :=
          To_Integer (Limine.Get_Physical_Address);
+
    begin
-      --  Initialize the kernel pagemap.
+      --  1) Allocate or create the kernel’s top-level page table data structure
+      --     (the “PML4” on x86_64). This will store all mappings needed by the kernel.
       MMU.Kernel_Table := new Page_Table'
          (PML4_Level      => [others => 0],
-          Mutex           => Lib.Synchronization.Unlocked_RW_Lock,
-          Map_Ranges_Root => null);
+         Mutex           => Lib.Synchronization.Unlocked_RW_Lock,
+         Map_Ranges_Root => null);
 
-      --  Map the memmap memory to the memory window.
+      --  2) Map all memory regions from the provided boot memory map.
+      --     Each memory region is described by (Start, Length, MemType).
       for E of Memmap loop
          if not Inner_Map_Range
             (Map            => Kernel_Table,
-             Physical_Start => To_Address (To_Integer (E.Start)),
-             Virtual_Start  => To_Address (To_Integer (E.Start) +
-                                           Memory_Offset),
-             Length         => Storage_Offset (E.Length),
-             Permissions    => NX_Flags,
-             Caching        => Write_Back)
+            Physical_Start => To_Address (To_Integer (E.Start)),
+            Virtual_Start  => To_Address (To_Integer (E.Start) + Memory_Offset),
+            Length         => Storage_Offset (E.Length),
+            Permissions    => NX_Flags,    -- read/write but no execute
+            Caching        => Write_Back)
          then
             return False;
          end if;
       end loop;
 
-      --  Map the kernel sections.
+      --  3) Map the kernel’s text, rodata, and data sections into the new page table,
+      --     each with appropriate permissions. Typically, we:
+      --
+      --      * TEXT  => RX_Flags: read + execute, no write
+      --      * RODATA => R_Flags: read only
+      --      * DATA  => NX_Flags: read + write, no execute
+      --
+      --  The addresses (TSAddr, OSAddr, DSAddr) have to be offset by the difference
+      --  between the load base (Kernel_Offset) and the actual physical location (Phys).
+      --  This ensures that the virtual addresses (text_start'Address, etc.) point
+      --  to the correct underlying physical addresses.
+
       if not Inner_Map_Range
          (Map            => Kernel_Table,
-          Physical_Start => To_Address (TSAddr - Kernel_Offset + Phys),
-          Virtual_Start  => text_start'Address,
-          Length         => text_end'Address - text_start'Address,
-          Permissions    => RX_Flags,
-          Caching        => Write_Back) or
+         Physical_Start => To_Address (TSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => text_start'Address,
+         Length         => text_end'Address - text_start'Address,
+         Permissions    => RX_Flags,
+         Caching        => Write_Back)
+         or else
          not Inner_Map_Range
          (Map            => Kernel_Table,
-          Physical_Start => To_Address (OSAddr - Kernel_Offset + Phys),
-          Virtual_Start  => rodata_start'Address,
-          Length         => rodata_end'Address - rodata_start'Address,
-          Permissions    => R_Flags,
-          Caching        => Write_Back) or
+         Physical_Start => To_Address (OSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => rodata_start'Address,
+         Length         => rodata_end'Address - rodata_start'Address,
+         Permissions    => R_Flags,
+         Caching        => Write_Back)
+         or else
          not Inner_Map_Range
          (Map            => Kernel_Table,
-          Physical_Start => To_Address (DSAddr - Kernel_Offset + Phys),
-          Virtual_Start  => data_start'Address,
-          Length         => data_end'Address - data_start'Address,
-          Permissions    => NX_Flags,
-          Caching        => Write_Back)
+         Physical_Start => To_Address (DSAddr - Kernel_Offset + Phys),
+         Virtual_Start  => data_start'Address,
+         Length         => data_end'Address - data_start'Address,
+         Permissions    => NX_Flags,
+         Caching        => Write_Back)
       then
          return False;
       end if;
 
-      --  Update the stats we can update now and unlock.
+      --  4) Track how large these mapped segments are, for memory usage stats.
       Global_Kernel_Usage :=
-         Memory.Size (text_end'Address - text_start'Address)     +
-         Memory.Size (rodata_end'Address - rodata_start'Address) +
-         Memory.Size (data_end'Address - data_start'Address);
+         Memory.Size (text_end'Address - text_start'Address)
+      + Memory.Size (rodata_end'Address - rodata_start'Address)
+      + Memory.Size (data_end'Address - data_start'Address);
 
-      --  Load the kernel table at last.
+      --  5) Actually load the new kernel page table into the hardware. On x86_64,
+      --     that usually involves writing to CR3 (done by Make_Active).
       return Make_Active (Kernel_Table);
+
    exception
       when Constraint_Error =>
          return False;
    end Init;
+
 
    procedure Fork_Table (Map : Page_Table_Acc; Forked : out Page_Table_Acc) is
       type Page_Data is array (Storage_Count range <>) of Unsigned_8;
@@ -198,58 +236,88 @@ package body Arch.MMU is
          Forked := null;
    end Fork_Table;
 
-   procedure Destroy_Table (Map : in out Page_Table_Acc) is
-      procedure F is new Ada.Unchecked_Deallocation
-         (Page_Table, Page_Table_Acc);
-      procedure F is new Ada.Unchecked_Deallocation
-         (Mapping_Range, Mapping_Range_Acc);
-      Last_Range : Mapping_Range_Acc;
-      Curr_Range : Mapping_Range_Acc;
-      Discard    : Memory.Size;
-   begin
-      Curr_Range := Map.Map_Ranges_Root;
-      Lib.Synchronization.Seize_Writer (Map.Mutex);
-      while Curr_Range /= null loop
-         if Curr_Range.Is_Allocated then
-            Physical.User_Free (To_Integer (Curr_Range.Physical_Start));
-         end if;
-         Last_Range := Curr_Range;
-         Curr_Range := Curr_Range.Next;
-         F (Last_Range);
-      end loop;
+ procedure Destroy_Table (Map : in out Page_Table_Acc) is
+   --  These instantiations let us call 'F(...)' to free the Page_Table and
+   --  Mapping_Range records themselves from the heap (Ada's Unchecked_Deallocation).
+   procedure Free_Page_Table is new Ada.Unchecked_Deallocation(Page_Table, Page_Table_Acc);
+   procedure Free_Mapping_Range is new Ada.Unchecked_Deallocation(Mapping_Range, Mapping_Range_Acc);
 
-      for L3 of Map.PML4_Level (1 .. 256) loop
-         declare
-            A3   : constant Integer_Address := Clean_Entry (L3);
-            PML3 : PML4
-               with Import, Address => To_Address (Memory_Offset + A3);
-         begin
-            if (L3 and Page_P) /= 0 then
-               for L2 of PML3 loop
-                  declare
-                     A2   : constant Integer_Address := Clean_Entry (L2);
-                     PML2 : PML4 with Import,
-                        Address => To_Address (Memory_Offset + A2);
-                  begin
-                     if (L2 and Page_P) /= 0 then
-                        for L1 of PML2 loop
-                           Memory.Physical.Free
-                              (Interfaces.C.size_t (Clean_Entry (L1)));
-                        end loop;
-                     end if;
-                     Memory.Physical.Free (Interfaces.C.size_t (A2));
-                  end;
-               end loop;
-            end if;
-            Global_Table_Usage := Global_Table_Usage - (PML4'Size / 8);
-            Memory.Physical.Free (Interfaces.C.size_t (A3));
-         end;
-      end loop;
-      F (Map);
-   exception
-      when Constraint_Error =>
-         return;
-   end Destroy_Table;
+   Last_Range : Mapping_Range_Acc;
+   Curr_Range : Mapping_Range_Acc;
+   Discard    : Memory.Size;
+begin
+   --  1) Acquire exclusive lock (writer lock) so no other code modifies
+   --     this page-table structure while we destroy it.
+   Lib.Synchronization.Seize_Writer (Map.Mutex);
+
+   --  2) Walk the singly linked list of "mapping ranges," freeing any
+   --     user-allocated physical memory and the list nodes.
+   Curr_Range := Map.Map_Ranges_Root;
+   while Curr_Range /= null loop
+      if Curr_Range.Is_Allocated then
+         --  Free the physical memory that was allocated for this mapping range.
+         Physical.User_Free(To_Integer(Curr_Range.Physical_Start));
+      end if;
+      Last_Range := Curr_Range;
+      Curr_Range := Curr_Range.Next;
+
+      --  Free the mapping-range record from the heap.
+      Free_Mapping_Range (Last_Range);
+   end loop;
+
+   --  3) Now free all lower-level page tables and page frames in the user-space
+   --     portion of the PML4. Typically we iterate over [1..256] to ignore
+   --     kernel-space entries in the top half of the PML4. 
+   for L3 of Map.PML4_Level(1 .. 256) loop
+      --  Clean_Entry(L3) is presumably a helper that masks out flags and returns
+      --  just the physical address of the next-level table (if present).
+      declare
+         A3   : constant Integer_Address := Clean_Entry(L3);
+         --  We treat that physical address as another 512-entry array (PML4)
+         --  because each x86_64 page-table level has the same layout (512 x 64-bit).
+         PML3 : PML4 with Import, Address => To_Address(Memory_Offset + A3);
+      begin
+         --  Check if the 'present' bit is set in this PML4 entry
+         --  (i.e., does it point to a next-level table?).
+         if (L3 and Page_P) /= 0 then
+            --  Walk the next level (PDP). For each entry, if present,
+            --  we go deeper and free the final-level page frames, then free the PDP.
+            for L2 of PML3 loop
+               declare
+                  A2   : constant Integer_Address := Clean_Entry(L2);
+                  PML2 : PML4 with Import, Address => To_Address(Memory_Offset + A2);
+               begin
+                  if (L2 and Page_P) /= 0 then
+                     --  If this entry is present, iterate over the final-level
+                     --  page table entries (L1), each pointing to page frames.
+                     for L1 of PML2 loop
+                        --  Extract the physical address from the last-level entry
+                        --  and free that frame from physical memory.
+                        Memory.Physical.Free(Interfaces.C.size_t(Clean_Entry(L1)));
+                     end loop;
+                  end if;
+                  --  Now free the physical page holding this "PML2" array.
+                  Memory.Physical.Free(Interfaces.C.size_t(A2));
+               end;
+            end loop;
+         end if;
+
+         --  Adjust usage statistics (subtract one page-table page).
+         Global_Table_Usage := Global_Table_Usage - (PML4'Size / 8);
+
+         --  Free the physical page holding the next-level table (the PDP),
+         --  since we are done with it.
+         Memory.Physical.Free(Interfaces.C.size_t(A3));
+      end;
+   end loop;
+
+   --  4) Finally, free the top-level Page_Table record itself.
+   Free_Page_Table (Map);
+exception
+   when Constraint_Error =>
+      return;  --  In case of any pointer issues, just return quietly.
+end Destroy_Table;
+
 
    function Make_Active (Map : Page_Table_Acc) return Boolean is
       Val : Unsigned_64;
