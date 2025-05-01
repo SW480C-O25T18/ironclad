@@ -77,79 +77,103 @@ package body Arch.MMU is
       Final : constant Virtual_Address := Virt + Virtual_Address (Length);
       Addr  : Virtual_Address;
    begin
-      while Virt < Final loop
-       Addr := Get_Page (Map, Virt, True);
+   while Virt < Final loop
+      PTE_Access := Get_Page (Map, Virt, True);
+      if PTE_Access = null then
+         return False;
+      end if;
 
       declare
-         PTE : Page_Table_Entry
-         with Address => To_Address (Addr), Import;
-         PPN : constant Unsigned_64 := Unsigned_64 (Phys) / 4096; -- phys >> 12
+         PTE : Page_Table_Entry renames PTE_Access.all;
+         PPN : constant Unsigned_64 := Unsigned_64 (Phys) / 4096;
       begin
-         --  Fill the 44-bit physical-page number fields
-         PTE.PPN0 := U9 (PPN and   16#1FF#);          -- bits  0..8
-         PTE.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#); -- bits  9..17
-         PTE.PPN2 := U26(Shift_Right (PPN, 18));           -- bits 18..43
+         --  Fill physical page number
+         PTE.PPN0 := U9 ( PPN         and 16#1FF#);
+         PTE.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#);
+         PTE.PPN2 := U26(Shift_Right (PPN, 18));
 
-         --  Access permission bits
+         --  Permissions
          PTE.R := (if Permissions.Can_Read    then 1 else 0);
          PTE.W := (if Permissions.Can_Write   then 1 else 0);
          PTE.X := (if Permissions.Can_Execute then 1 else 0);
          PTE.U := (if Permissions.Is_User_Accesible then 1 else 0);
          PTE.G := (if Permissions.Is_Global   then 1 else 0);
 
-         --  Software must set A and D the first time it installs a page
-         PTE.A := 1;   -- “accessed”
-         PTE.D := (if Permissions.Can_Write then 1 else 0); -- writable ⇒ dirty
-
-         PTE.V := 1;   -- valid
+         PTE.A := 1;
+         PTE.D := (if Permissions.Can_Write then 1 else 0);
+         PTE.V := 1;
       end;
 
+      Virt := Virt + Page_Size;
+      Phys := Phys + Page_Size;
+   end loop;
 
-         Virt := Virt + Page_Size;
-         Phys := Phys + Page_Size;
-      end loop;
       return True;
    exception
       when Constraint_Error =>
          return False;
    end Inner_Map_Range;
 
+   -----------------------------------------------------------------
+   --  Return: an access value designating the level-0 PTE
+   --          that corresponds to Virtual.  If Allocate = False
+   --          and any intermediate table is absent, return null.
+   -----------------------------------------------------------------
    function Get_Page
-  (Map      : Page_Table_Acc;
-   Virtual  : Virtual_Address;
-   Allocate : Boolean) return Virtual_Address
-is
-   Addr64 : constant Unsigned_64 := Unsigned_64 (Virtual);
+   (Map      : Page_Table_Acc;
+      Virtual  : Virtual_Address;
+      Allocate : Boolean) return Page_Table_Entry_Access
+   is
+      type Page_Table_Entry_Access is access all Page_Table_Entry;
 
-   --  VPN[2:0] indices (9 bits each)
-   VPN2 : constant Unsigned_64 :=
-              Shift_Right (Addr64 and Shift_Left (16#1FF#, 30), 30);
-   VPN1 : constant Unsigned_64 :=
-              Shift_Right (Addr64 and Shift_Left (16#1FF#, 21), 21);
-   VPN0 : constant Unsigned_64 :=
-              Shift_Right (Addr64 and Shift_Left (16#1FF#, 12), 12);
+      Addr64 : constant Unsigned_64 := Unsigned_64 (Virtual);
 
-   L2_Phys : Physical_Address :=
-                To_Integer (Map.Root'Address) - Memory_Offset;
-   L1_Phys : Physical_Address := Memory.Null_Address;
-   L0_Phys : Physical_Address := Memory.Null_Address;
-begin
-   --  Walk level-2 → level-1 → level-0
-   L1_Phys := Get_Next_Level (L2_Phys, VPN2, Allocate);
-   if L1_Phys = Memory.Null_Address then goto Error_Return; end if;
+      --  VPN[2:0] indices (9 bits each)
+      VPN2 : constant Unsigned_64 :=
+               Shift_Right (Addr64 and Shift_Left (16#1FF#, 30), 30);
+      VPN1 : constant Unsigned_64 :=
+               Shift_Right (Addr64 and Shift_Left (16#1FF#, 21), 21);
+      VPN0 : constant Unsigned_64 :=
+               Shift_Right (Addr64 and Shift_Left (16#1FF#, 12), 12);
 
-   L0_Phys := Get_Next_Level (L1_Phys, VPN1, Allocate);
-   if L0_Phys = Memory.Null_Address then goto Error_Return; end if;
+      L2_Phys : Physical_Address :=
+                  To_Integer (Map.Root'Address) - Memory_Offset;
+      L1_Phys : Physical_Address := Memory.Null_Address;
+      L0_Phys : Physical_Address := Memory.Null_Address;
+      PTE_VA  : Virtual_Address;
+   begin
+      ----------------------------------------------------------------
+      --  Walk L2 → L1 → L0, allocating new table pages if requested
+      ----------------------------------------------------------------
+      L1_Phys := Get_Next_Level (L2_Phys, VPN2, Allocate);
+      if L1_Phys = Memory.Null_Address then
+         return null;
+      end if;
 
-   --  Return *address* of the final PTE (still physical)
-   return L0_Phys + Memory_Offset + (Physical_Address (VPN0) * 8);
+      L0_Phys := Get_Next_Level (L1_Phys, VPN1, Allocate);
+      if L0_Phys = Memory.Null_Address then
+         return null;
+      end if;
 
-<<Error_Return>>
-   return Memory.Null_Address;
-exception
-   when Constraint_Error =>
-      Lib.Panic.Hard_Panic ("Exception in RISC-V page walk");
-end Get_Page;
+      ----------------------------------------------------------------
+      --  Convert the level-0 table’s *physical* base back to a
+      --  kernel-virtual address (direct-map) and add the slot offset.
+      ----------------------------------------------------------------
+      PTE_VA := L0_Phys + Memory_Offset + Physical_Address (VPN0) * 8;
+
+      --  Provide a typed view on that 8-byte slot.
+      declare
+         PTE : aliased Page_Table_Entry
+         with Import, Address => To_Address (PTE_VA);
+      begin
+         return PTE'Access;
+      end;
+
+   exception
+      when Constraint_Error =>
+         Lib.Panic.Hard_Panic ("Exception in RISC-V page walk");
+   end Get_Page;
+
 
 
 
