@@ -19,7 +19,7 @@ with Userland.Process;
 with Scheduler;
 with Arch.Limine;
 
-package Arch.CPU is
+package Arch.CPU with SPARK_Mode => Off is
    SSTATUS_SPP : constant Unsigned_64 := 16#100#;  -- bit 8 in sstatus
    --  Core-local data, that each core holds an own version of.
    type Core_Local;

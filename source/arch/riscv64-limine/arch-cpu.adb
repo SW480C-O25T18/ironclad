@@ -17,7 +17,6 @@
 with Arch.Debug;
 with System;                 use System;
 with System.Machine_Code;    use System.Machine_Code;
-with Lib.Messages;
 with Lib.Panic;
 with Arch.Limine;            use Arch.Limine;
 with Ada.Unchecked_Conversion;
@@ -118,7 +117,7 @@ package body Arch.CPU with SPARK_Mode => Off is
    procedure Core_Bootstrap
      (Info : access Limine.RISCV64_SMP_CPU_Info) is
    begin
-      Lib.Messages.Put_Line ("Hello from core "
+      Debug.Print ("Hello from core "
                              & Info.Extra_Arg'Image);
       Debug.Print ("Core_Bootstrap: Info.Extra_Arg = "
                    & Info.Extra_Arg'Image);
