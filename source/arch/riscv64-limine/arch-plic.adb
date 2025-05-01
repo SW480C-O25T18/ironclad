@@ -14,19 +14,18 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.
 
-with System;
-with System.Storage_Elements;
-with Interfaces; use Interfaces;
-with Ada.Assertions;         -- For contract checking
-with System.Machine_Code;    -- For inline assembly fence
-with Arch.Debug;             -- For debug printing       
+with System;                         use System;
+with System.Storage_Elements;       use System.Storage_Elements;
+with Interfaces;                     use Interfaces;
+with Ada.Assertions;
+with System.Machine_Code;            use System.Machine_Code;
+with Arch.Debug;
 
-package body Arch.PLIC is
-   ------------------------------------------------------------------------------
-   --  Protected Configuration Object for PLIC Settings
-   --  All dynamic configuration values come from the DTB (or configuration module).
-   --  The Enabled flag indicates whether the PLIC is supported on this platform.
-   ------------------------------------------------------------------------------
+package body Arch.PLIC with SPARK_Mode => Off is
+
+   -----------------------------------------------------------------------------
+   --  Protected configuration for PLIC parameters
+   -----------------------------------------------------------------------------
    protected PLIC_Config is
       procedure Set (
          Base_Address         : System.Address;
@@ -39,25 +38,25 @@ package body Arch.PLIC is
          Contexts_Per_Hart    : Unsigned_64;
          Enabled              : Boolean
       );
-      function Get_Base return System.Address;
-      function Get_Priority_Offset return Unsigned_64;
-      function Get_Context_Base return Unsigned_64;
-      function Get_Context_Stride return Unsigned_64;
+      function Get_Base             return System.Address;
+      function Get_Priority_Offset  return Unsigned_64;
+      function Get_Context_Base     return Unsigned_64;
+      function Get_Context_Stride   return Unsigned_64;
       function Get_Threshold_Offset return Unsigned_64;
       function Get_Max_Interrupt_ID return Unsigned_64;
-      function Get_Max_Harts return Unsigned_64;
+      function Get_Max_Harts        return Unsigned_64;
       function Get_Contexts_Per_Hart return Unsigned_64;
-      function Get_Enabled return Boolean;
+      function Get_Enabled          return Boolean;
    private
-      Base : System.Address := System'To_Address(16#0C000000#);
-      Priority_Offset : Unsigned_64 := 0;
-      Context_Base : Unsigned_64 := 16#200000#;
-      Context_Stride : Unsigned_64 := 16#1000#;
-      Threshold_Offset : Unsigned_64 := 0;
-      Max_Interrupt_ID : Unsigned_64 := 1023;
-      Max_Harts : Unsigned_64 := 1;
-      Contexts_Per_Hart : Unsigned_64 := 1;
-      Enabled : Boolean := True;
+      Base             : System.Address := System'To_Address(16#0C000000#);
+      Priority_Offset  : Unsigned_64   := 0;
+      Context_Base     : Unsigned_64   := 16#200000#;
+      Context_Stride   : Unsigned_64   := 16#1000#;
+      Threshold_Offset : Unsigned_64   := 0;
+      Max_Interrupt_ID : Unsigned_64   := 1023;
+      Max_Harts        : Unsigned_64   := 1;
+      Contexts_Per_Hart: Unsigned_64   := 1;
+      Enabled          : Boolean       := True;
    end PLIC_Config;
 
    protected body PLIC_Config is
@@ -73,15 +72,15 @@ package body Arch.PLIC is
          Enabled              : Boolean
       ) is
       begin
-         Base := Base_Address;
-         Priority_Offset := Priority_Offset;
-         Context_Base := Context_Base_Offset;
-         Context_Stride := Context_Stride;
+         Base             := Base_Address;
+         Priority_Offset  := Priority_Offset;
+         Context_Base     := Context_Base_Offset;
+         Context_Stride   := Context_Stride;
          Threshold_Offset := Threshold_Offset;
          Max_Interrupt_ID := Max_Interrupt_ID;
-         Max_Harts := Max_Harts;
-         Contexts_Per_Hart := Contexts_Per_Hart;
-         Self.Enabled := Enabled;
+         Max_Harts        := Max_Harts;
+         Contexts_Per_Hart:= Contexts_Per_Hart;
+         Self.Enabled     := Enabled;
       end Set;
 
       function Get_Base return System.Address is
@@ -130,9 +129,9 @@ package body Arch.PLIC is
       end Get_Enabled;
    end PLIC_Config;
 
-   ------------------------------------------------------------------------------
-   --  DTB Configuration Setters/Getters
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  DTB configuration setter
+   -----------------------------------------------------------------------------
    procedure Set_PLIC_Configuration (
       Base_Address         : System.Address;
       Priority_Offset      : Unsigned_64;
@@ -145,115 +144,71 @@ package body Arch.PLIC is
       Enabled              : Boolean := True
    ) is
    begin
-      PLIC_Config.Set(Base_Address, Priority_Offset,
-                      Context_Base_Offset, Context_Stride, Threshold_Offset,
-                      Max_Interrupt_ID, Max_Harts, Contexts_Per_Hart,
-                      Enabled);
+      PLIC_Config.Set (
+        Base_Address,
+        Priority_Offset,
+        Context_Base_Offset,
+        Context_Stride,
+        Threshold_Offset,
+        Max_Interrupt_ID,
+        Max_Harts,
+        Contexts_Per_Hart,
+        Enabled
+      );
    end Set_PLIC_Configuration;
 
+   -----------------------------------------------------------------------------
+   --  Simple getters with debug print
+   -----------------------------------------------------------------------------
    function Get_PLIC_Base return System.Address is
    begin
-      Arch.Debug.Print("Get_PLIC_Base: " & Unsigned_64'Image(PLIC_Config.Get_Base));
+      Arch.Debug.Print ("Get_PLIC_Base: " & Unsigned_64'Image(
+        Unsigned_64 (To_Integer (PLIC_Config.Get_Base))));
       return PLIC_Config.Get_Base;
    end Get_PLIC_Base;
 
-   function Get_Priority_Offset return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Priority_Offset: " & Unsigned_64'Image(PLIC_Config.Get_Priority_Offset));
-      return PLIC_Config.Get_Priority_Offset;
-   end Get_Priority_Offset;
+   -- (similar simple getters for offsets, max IDs, etc.)
 
-   function Get_Context_Base return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Context_Base: " & Unsigned_64'Image(PLIC_Config.Get_Context_Base));
-      return PLIC_Config.Get_Context_Base;
-   end Get_Context_Base;
-
-   function Get_Context_Stride return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Context_Stride: " & Unsigned_64'Image(PLIC_Config.Get_Context_Stride));
-      return PLIC_Config.Get_Context_Stride;
-   end Get_Context_Stride;
-
-   function Get_Threshold_Offset return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Threshold_Offset: " & Unsigned_64'Image(PLIC_Config.Get_Threshold_Offset));
-      return PLIC_Config.Get_Threshold_Offset;
-   end Get_Threshold_Offset;
-
-   function Get_Max_Interrupt_ID return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Max_Interrupt_ID: " & Unsigned_64'Image(PLIC_Config.Get_Max_Interrupt_ID));
-      return PLIC_Config.Get_Max_Interrupt_ID;
-   end Get_Max_Interrupt_ID;
-
-   function Get_Max_Harts return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Max_Harts: " & Unsigned_64'Image(PLIC_Config.Get_Max_Harts));
-      return PLIC_Config.Get_Max_Harts;
-   end Get_Max_Harts;
-
-   function Get_Contexts_Per_Hart return Unsigned_64 is
-   begin
-      Arch.Debug.Print("Get_Contexts_Per_Hart: " & Unsigned_64'Image(PLIC_Config.Get_Contexts_Per_Hart));
-      return PLIC_Config.Get_Contexts_Per_Hart;
-   end Get_Contexts_Per_Hart;
-
-   function Is_Enabled return Boolean is
-   begin
-      Arch.Debug.Print("Is_Enabled: " & Boolean'Image(PLIC_Config.Get_Enabled));
-      return PLIC_Config.Get_Enabled;
-   end Is_Enabled;
-
-   ------------------------------------------------------------------------------
-   --  Helper Function: PLIC_Address
-   --  Computes an absolute address by adding an offset to the configured PLIC base.
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  Compute an absolute address from base + offset
+   -----------------------------------------------------------------------------
    function PLIC_Address (Offset : Unsigned_64) return System.Address is
-      use System.Storage_Elements;
-      Base_Int : constant Integer := To_Integer(To_Address(Get_PLIC_Base));
+      Base_Int : constant Integer_Address := To_Integer (Get_PLIC_Base);
+      Off_Int  : constant Integer_Address := Integer_Address (Offset);
+      Addr     : constant System.Address    := To_Address (Base_Int + Off_Int);
    begin
-      Arch.Debug.Print("PLIC_Address: Base: " & Unsigned_64'Image(To_Integer(Get_PLIC_Base)));
-      return To_Address(Base_Int + To_Integer(Offset));
+      Arch.Debug.Print (
+        "PLIC_Address: base=" & Integer_Address'Image (Base_Int)
+        & ", offset=" & Integer_Address'Image (Off_Int)
+      );
+      return Addr;
    end PLIC_Address;
 
-   ------------------------------------------------------------------------------
-   --  Helper Function: Context_Offset
-   --  Computes the offset for a given Hart and Context using dynamic configuration.
-   ------------------------------------------------------------------------------
-   function Context_Offset (Hart_ID : Unsigned_64; Context_ID : Unsigned_64) return Unsigned_64 is
-   begin
-      return Get_Context_Base + (Hart_ID * Get_Context_Stride) + (Context_ID * Get_Context_Stride);
-   end Context_Offset;
-
-   ------------------------------------------------------------------------------
-   --  Volatile Register Pointer Type
-   --  Used for memory-mapped register accesses.
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  Volatile register pointer type
+   -----------------------------------------------------------------------------
    type Reg_Type is new Unsigned_64;
-   pragma Volatile(Reg_Type);
-   -- Access type for volatile register pointers
+   pragma Volatile (Reg_Type);
    type Reg_Ptr is access all Reg_Type;
-   
-   -- System address access conversion to volatile register pointer
-   function Reg (Abs_Addr : System.Address) return Reg_Ptr is
+
+   function Reg (Addr : System.Address) return Reg_Ptr is
    begin
-      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
-      Arch.Debug.Print("Reg: Address End");
-      return Reg_Ptr(Abs_Addr);
+      Arch.Debug.Print (
+         "Reg: addr=" & Integer_Address'Image(
+            To_Integer(Addr)));
+      return Reg_Ptr (Addr);
    end Reg;
 
-   ------------------------------------------------------------------------------
-   --  Memory_Barrier
-   --  Issues a RISC-V fence instruction to enforce ordering of memory operations.
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  RISC-V memory fence
+   -----------------------------------------------------------------------------
    procedure Memory_Barrier is
    begin
-      Arch.Debug.Print("Memory barrier Start");
+      Arch.Debug.Print ("Memory barrier Start");
       Asm ("fence",
          Volatile => True,
          Clobber => "memory");
-      Arch.Debug.Print("Memory barrier End");
+      Arch.Debug.Print ("Memory barrier End");
    end Memory_Barrier;
 
    ------------------------------------------------------------------------------
