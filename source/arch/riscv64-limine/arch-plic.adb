@@ -250,12 +250,9 @@ package body Arch.PLIC is
    procedure Memory_Barrier is
    begin
       Arch.Debug.Print("Memory barrier Start");
-      System.Machine_Code.Atomic_Load_Store(
-         Atomic_Operation => System.Machine_Code.Fence,
-         Address          => System.Null_Address,
-         Value            => 0,
-         Size             => 0
-      );
+      Asm ("fence",
+         Volatile => True,
+         Clobber => "memory");
       Arch.Debug.Print("Memory barrier End");
    end Memory_Barrier;
 
