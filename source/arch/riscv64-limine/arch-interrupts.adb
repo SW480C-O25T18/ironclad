@@ -29,6 +29,8 @@ with Arch.Local;
 with Lib.Panic;
 with Scheduler;
 with Userland.Syscall;     use Userland.Syscall;
+with Ada.Interrupts;       use Ada.Interrupts;
+with Ada.Exceptions;       use Ada.Exceptions;
 
 package body Arch.Interrupts with SPARK_Mode => Off is
 
@@ -231,19 +233,19 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    exception
       when Constraint_Error =>
          Arch.Debug.Print("Register_Device_IRQ: Constraint error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Constraint error", Node);
+         Lib.Panic.Hard_Panic("Register_Device_IRQ: Constraint error: " & Node.Name);
       when Program_Error =>
          Arch.Debug.Print("Register_Device_IRQ: Program error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Program error", Node);
+         Lib.Panic.Hard_Panic("Register_Device_IRQ: Program error: " & Node.Name);
       when Storage_Error =>
          Arch.Debug.Print("Register_Device_IRQ: Storage error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Storage error", Node);
+         Lib.Panic.Hard_Panic("Register_Device_IRQ: Storage error: " & Node.Name);
       when Tasking_Error =>
          Arch.Debug.Print("Register_Device_IRQ: Tasking error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Tasking error", Node);
+         Lib.Panic.Hard_Panic("Register_Device_IRQ: Tasking error: " & Node.Name);
       when others =>
          Arch.Debug.Print("Register_Device_IRQ: Unhandled exception while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Unhandled exception", Node);
+         Lib.Panic.Hard_Panic("Register_Device_IRQ: Unhandled exception: " & Node.Name);
    end Register_Device_IRQ;
 
    ------------------------------------------------------------------------------
