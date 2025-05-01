@@ -1,8 +1,28 @@
-with System;                          use System;
-with System.Storage_Elements;        use System.Storage_Elements;
-with Interfaces;                      use Interfaces;
+--  arch-cpu.adb: CPU management routines.
+--  Copyright (C) 2024 streaksu
+--  Copyright (C) 2025 scweeks
+--
+--  This program is free software: you can redistribute it and/or modify
+--  it under the terms of the GNU General Public License as published by
+--  the Free Software Foundation, either version 3 of the License, or
+--  (at your option) any later version.
+--
+--  This program is distributed in the hope that it will be useful,
+--  but WITHOUT ANY WARRANTY; without even the implied warranty of
+--  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+--  GNU General Public License for more details.
+--
+--  You should have received a copy of the GNU General Public License
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+--  arch-cpu.adb: CPU management routines.
+--  Copyright (C) 2025 scweeks
+
+with System; use System;
+with System.Storage_Elements; use System.Storage_Elements;
+with Interfaces; use Interfaces;
 with Ada.Unchecked_Conversion;
-with Arch.Debug;
+with System.Machine_Code; use System.Machine_Code;
 
 package body Arch.CLINT with SPARK_Mode => Off is
 
@@ -98,13 +118,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Target => MSIP_Ptr
       );
 
-      Base_Int : constant Integer_Address :=
-        To_Integer (Get_CLINT_Base);
+      Base_Int : constant Integer_Address := To_Integer (Get_CLINT_Base);
       Off_Int  : constant Integer_Address :=
-        Integer_Address (Get_MSIP_Offset)
-        + Integer_Address (Hart_ID * 4);
-      Addr     : constant System.Address :=
-        To_Address (Base_Int + Off_Int);
+        Integer_Address (Get_MSIP_Offset) + Integer_Address (Hart_ID * 4);
+      Addr     : constant System.Address := To_Address (Base_Int + Off_Int);
       MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
    begin
       if not CLINT_State.Enabled then
@@ -129,13 +146,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Target => MSIP_Ptr
       );
 
-      Base_Int : constant Integer_Address :=
-        To_Integer (Get_CLINT_Base);
+      Base_Int : constant Integer_Address := To_Integer (Get_CLINT_Base);
       Off_Int  : constant Integer_Address :=
-        Integer_Address (Get_MSIP_Offset)
-        + Integer_Address (Hart_ID * 4);
-      Addr     : constant System.Address :=
-        To_Address (Base_Int + Off_Int);
+        Integer_Address (Get_MSIP_Offset) + Integer_Address (Hart_ID * 4);
+      Addr     : constant System.Address := To_Address (Base_Int + Off_Int);
       MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
    begin
       if not CLINT_State.Enabled then
@@ -155,12 +169,9 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Target => Time_Ptr
       );
 
-      Base_Int : constant Integer_Address :=
-        To_Integer (Get_CLINT_Base);
-      Off_Int  : constant Integer_Address :=
-        Integer_Address (Get_MTime_Offset);
-      Addr     : constant System.Address :=
-        To_Address (Base_Int + Off_Int);
+      Base_Int : constant Integer_Address := To_Integer (Get_CLINT_Base);
+      Off_Int  : constant Integer_Address := Integer_Address (Get_MTime_Offset);
+      Addr     : constant System.Address := To_Address (Base_Int + Off_Int);
       Time_Reg : Time_Ptr := To_Time_Ptr (Addr);
    begin
       if not CLINT_State.Enabled then
@@ -180,13 +191,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Target => Cmp_Ptr
       );
 
-      Base_Int : constant Integer_Address :=
-        To_Integer (Get_CLINT_Base);
+      Base_Int : constant Integer_Address := To_Integer (Get_CLINT_Base);
       Off_Int  : constant Integer_Address :=
-        Integer_Address (Get_MTimecmp_Offset)
-        + Integer_Address (Hart_ID * 8);
-      Addr     : constant System.Address :=
-        To_Address (Base_Int + Off_Int);
+        Integer_Address (Get_MTimecmp_Offset) + Integer_Address (Hart_ID * 8);
+      Addr     : constant System.Address := To_Address (Base_Int + Off_Int);
       Cmp_Reg  : Cmp_Ptr := To_Cmp_Ptr (Addr);
    begin
       if not CLINT_State.Enabled then
@@ -206,13 +214,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Target => Cmp_Ptr
       );
 
-      Base_Int : constant Integer_Address :=
-        To_Integer (Get_CLINT_Base);
+      Base_Int : constant Integer_Address := To_Integer (Get_CLINT_Base);
       Off_Int  : constant Integer_Address :=
-        Integer_Address (Get_MTimecmp_Offset)
-        + Integer_Address (Hart_ID * 8);
-      Addr     : constant System.Address :=
-        To_Address (Base_Int + Off_Int);
+        Integer_Address (Get_MTimecmp_Offset) + Integer_Address (Hart_ID * 8);
+      Addr     : constant System.Address := To_Address (Base_Int + Off_Int);
       Cmp_Reg  : Cmp_Ptr := To_Cmp_Ptr (Addr);
    begin
       if not CLINT_State.Enabled then
