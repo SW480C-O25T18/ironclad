@@ -20,24 +20,31 @@
 pragma SPARK_Mode (Off);
 pragma Warnings (Off, "SPARK_Mode is disabled");
 
-with Interfaces;          use Interfaces;
 with Interfaces.C;        use Interfaces.C;
 with System;              use System;
-with System.Storage_Elements;
-with System.Machine_Code;
+with System.Machine_Code;  use System.Machine_Code;
 with Memory.Physical;     use Memory.Physical;
-
+with Ada.Unchecked_Conversion;
+with Memory.Utils;
 with Arch.CPU;            use Arch.CPU;
 with Arch.Local;          use Arch.Local;
 with Arch.Interrupts;     use Arch.Interrupts;
 with Arch.Snippets;       use Arch.Snippets;
 
 package body Arch.Context is
+   --  forward declarations so Setup_FP_Routines can see them
+   procedure FP_Save_NoOp    (Ctx : in out FP_Context);
+   procedure FP_Load_NoOp    (Ctx :     FP_Context);
+   procedure Save_FP_Context_F (Ctx : in out FP_Context);
+   procedure Load_FP_Context_F (Ctx :     FP_Context);
+   procedure Save_FP_Context_D (Ctx : in out FP_Context);
+   procedure Load_FP_Context_D (Ctx :     FP_Context);
+
    --  CSR access for misa register
    function Read_MISA return Unsigned_64 is
       Value : Unsigned_64;
    begin
-      Asm ("csrr %0, misa",
+      Machine_Code.Asm ("csrr %0, misa",
            Outputs  => Unsigned_64'Asm_Output ("=r", Value),
            Clobber  => "memory",
            Volatile => True);
@@ -84,7 +91,7 @@ package body Arch.Context is
      Ctx        : out GP_Context;
      Stack      : System.Address;
      Start_Addr : System.Address) is
-      Frame_Buf : aliased Frame := (others => 0);
+      Frame_Buf : aliased Frame;
       FP        : access Frame := Frame_Buf'Access;
    begin
       pragma Assert (Stack /= System.Null_Address);
@@ -99,7 +106,7 @@ package body Arch.Context is
 
       declare
          Bytes : size_t := size_t (
-            FP_Context'Storage_Size / Character'Size);
+            FP_Context'Size / Character'Size);
          Addr  : System.Address := Alloc (Bytes);
       begin
          Set_Memory (Addr, Bytes, 0);
@@ -152,7 +159,7 @@ package body Arch.Context is
    --  Init FP context for new thread
    procedure Init_FP_Context (Ctx : out FP_Context) is
       Bytes : size_t := size_t (
-         FP_Context'Storage_Size / Character'Size);
+         FP_Context'Size / Character'Size);
       Addr  : System.Address := Alloc (Bytes);
    begin
       Set_Memory (Addr, Bytes, 0);
@@ -194,7 +201,7 @@ package body Arch.Context is
    procedure Save_FP_Context_F (Ctx : in out FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0 .. 31 loop
+      for Reg in 0..31 loop
          Machine_Code.Asm (
            "fsw f" & Reg'Image & ", " &
            Integer'Image (Reg * 4) & "(%0)",
@@ -207,7 +214,7 @@ package body Arch.Context is
    procedure Load_FP_Context_F (Ctx : FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0 .. 31 loop
+      for Reg in 0..31 loop
          Machine_Code.Asm (
            "flw f" & Reg'Image & ", " &
            Integer'Image (Reg * 4) & "(%0)",
@@ -221,7 +228,7 @@ package body Arch.Context is
    procedure Save_FP_Context_D (Ctx : in out FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0 .. 31 loop
+      for Reg in 0..31 loop
          Machine_Code.Asm (
            "fsd f" & Reg'Image & ", " &
            Integer'Image (Reg * 8) & "(%0)",
@@ -234,7 +241,7 @@ package body Arch.Context is
    procedure Load_FP_Context_D (Ctx : FP_Context) is
       Ptr : System.Address := Ctx;
    begin
-      for Reg in 0 .. 31 loop
+      for Reg in 0..31 loop
          Machine_Code.Asm (
            "fld f" & Reg'Image & ", " &
            Integer'Image (Reg * 8) & "(%0)",
