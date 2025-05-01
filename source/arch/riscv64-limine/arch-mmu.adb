@@ -27,7 +27,7 @@ package body Arch.MMU is
    begin
       PPN := u64(PTE.PPN0) or Shift_Left(u64(PTE.PPN1), 9) or Shift_Left(u64(PTE.PPN2), 18);
       
-      return Interfaces.C.size_t(Shift_Left(PPN, 12));
+      return Interfaces.C.size_t(Shift_Left(PPN, 12)); -- change to use Physical_Address()
    end Extract_Physical_Addr;
 
    function Extract_Satp_Data (Satp_Content : u64) return Satp_Register is
@@ -61,6 +61,118 @@ package body Arch.MMU is
    begin
       return True;
    end Init;
+
+      function Inner_Map_Range
+   (Map            : Page_Table_Acc;
+      Physical_Start : System.Address;
+      Virtual_Start  : System.Address;
+      Length         : Storage_Count;
+      Permissions    : Page_Permissions;
+      Caching        : Caching_Model) return Boolean
+   is
+      --  Flags : constant Unsigned_64 := Flags_To_Bitmap (Permissions, Caching);
+
+      Virt  : Virtual_Address          := To_Integer (Virtual_Start);
+      Phys  : Virtual_Address          := To_Integer (Physical_Start);
+      Final : constant Virtual_Address := Virt + Virtual_Address (Length);
+      Addr  : Virtual_Address;
+   begin
+      while Virt < Final loop
+       Addr := Get_Page (Map, Virt, True);
+
+      declare
+         PTE : Page_Table_Entry
+         with Address => To_Address (Addr), Import;
+         PPN : constant Unsigned_64 := Unsigned_64 (Phys) / 4096; -- phys >> 12
+      begin
+         --  Fill the 44-bit physical-page number fields
+         PTE.PPN0 := U9 (PPN and   16#1FF#);          -- bits  0..8
+         PTE.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#); -- bits  9..17
+         PTE.PPN2 := U26(Shift_Right (PPN, 18));           -- bits 18..43
+
+         --  Access permission bits
+         PTE.R := (if Permissions.Can_Read    then 1 else 0);
+         PTE.W := (if Permissions.Can_Write   then 1 else 0);
+         PTE.X := (if Permissions.Can_Execute then 1 else 0);
+         PTE.U := (if Permissions.Is_User_Accesible then 1 else 0);
+         PTE.G := (if Permissions.Is_Global   then 1 else 0);
+
+         --  Software must set A and D the first time it installs a page
+         PTE.A := 1;   -- “accessed”
+         PTE.D := (if Permissions.Can_Write then 1 else 0); -- writable ⇒ dirty
+
+         PTE.V := 1;   -- valid
+      end;
+
+
+         Virt := Virt + Page_Size;
+         Phys := Phys + Page_Size;
+      end loop;
+      return True;
+   exception
+      when Constraint_Error =>
+         return False;
+   end Inner_Map_Range;
+
+   function Get_Page
+  (Map      : Page_Table_Acc;
+   Virtual  : Virtual_Address;
+   Allocate : Boolean) return Virtual_Address
+is
+   Addr64 : constant Unsigned_64 := Unsigned_64 (Virtual);
+
+   --  VPN[2:0] indices (9 bits each)
+   VPN2 : constant Unsigned_64 :=
+              Shift_Right (Addr64 and Shift_Left (16#1FF#, 30), 30);
+   VPN1 : constant Unsigned_64 :=
+              Shift_Right (Addr64 and Shift_Left (16#1FF#, 21), 21);
+   VPN0 : constant Unsigned_64 :=
+              Shift_Right (Addr64 and Shift_Left (16#1FF#, 12), 12);
+
+   L2_Phys : Physical_Address :=
+                To_Integer (Map.Root'Address) - Memory_Offset;
+   L1_Phys : Physical_Address := Memory.Null_Address;
+   L0_Phys : Physical_Address := Memory.Null_Address;
+begin
+   --  Walk level-2 → level-1 → level-0
+   L1_Phys := Get_Next_Level (L2_Phys, VPN2, Allocate);
+   if L1_Phys = Memory.Null_Address then goto Error_Return; end if;
+
+   L0_Phys := Get_Next_Level (L1_Phys, VPN1, Allocate);
+   if L0_Phys = Memory.Null_Address then goto Error_Return; end if;
+
+   --  Return *address* of the final PTE (still physical)
+   return L0_Phys + Memory_Offset + (Physical_Address (VPN0) * 8);
+
+<<Error_Return>>
+   return Memory.Null_Address;
+exception
+   when Constraint_Error =>
+      Lib.Panic.Hard_Panic ("Exception in RISC-V page walk");
+end Get_Page;
+
+
+
+   --  function Flags_To_Bitmap
+   --  (Perm    : Page_Permissions;
+   --     Caching : Caching_Model) return Unsigned_64
+   --  is
+   --     Result : Unsigned_64 := Page_V or Page_A or Page_D;  -- always valid & A/D
+   --  begin
+   --     --  Basic access bits
+   --     if Perm.Can_Read    then Result := Result or Page_R; end if;
+   --     if Perm.Can_Write   then Result := Result or Page_W; end if;
+   --     if Perm.Can_Execute then Result := Result or Page_X; end if;
+   --     if Perm.Is_User_Accesible then Result := Result or Page_U; end if;
+   --     if Perm.Is_Global        then Result := Result or Page_G; end if;
+
+   --     --  RISC-V has no per-PTE cache-policy bits; ignore 'Caching'.
+   --     return Result;
+   --  exception
+   --     when Constraint_Error =>
+   --        Lib.Panic.Hard_Panic ("Exception building RISC-V PTE flags");
+   --  end Flags_To_Bitmap;
+
 
    procedure Fork_Table (Map : Page_Table_Acc; Forked : out Page_Table_Acc) is
       pragma Unreferenced (Map);
@@ -98,7 +210,7 @@ package body Arch.MMU is
          return;
       end if;
       
-      for i in 1 .. 256 loop -- avoid kernel-space entries
+      for i in 1 .. 256 loop -- avoid kernel-space entries Page_Table_Entries
          declare
             L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
             L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
@@ -162,6 +274,9 @@ package body Arch.MMU is
 
    function Make_Active (Map : Page_Table_Acc) return Boolean is
       Physical_Addr : Unsigned_64;
+      Satp_Content : Satp_Register;
+      New_PPN : U44;
+      New_SATP : Satp_Register;
    begin
       Physical_Addr := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory.Memory_Offset);
       Satp_Content := Arch.Snippets.Read_SATP;
