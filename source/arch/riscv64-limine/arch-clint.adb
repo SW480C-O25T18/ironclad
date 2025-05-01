@@ -1,4 +1,4 @@
---  arch-exceptions.ads: Specification of Core Local Interruptor (CLINT) utilities.
+--  arch-clint.ads: Specification of Core Local Interruptor (CLINT).
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
@@ -91,7 +91,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
    pragma Volatile (Reg_Type);
    type Reg_Ptr is access all Reg_Type;
    function To_Reg_Ptr is new Ada.Unchecked_Conversion(
-      Source => System.Address, 
+      Source => System.Address,
       Target => Reg_Ptr
       );
 
@@ -101,7 +101,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
          "Reg: Addr = "
          & Unsigned_64'Image (Address_To_U64 (Abs_Addr))
       );
-      return To_Reg_Ptr(Abs_Addr);
+      return To_Reg_Ptr (Abs_Addr);
    end Reg;
 
    procedure Memory_Barrier is
@@ -118,12 +118,17 @@ package body Arch.CLINT with SPARK_Mode => Off is
       type MSIP_Type is new Unsigned_32;
       pragma Volatile (MSIP_Type);
       type MSIP_Ptr is access all MSIP_Type;
+      -- conversion from Address ⇒ MSIP_Ptr
+      function To_MSIP_Ptr is new Ada.Unchecked_Conversion(
+         Source => System.Address,
+         Target => MSIP_Ptr
+      );
       Addr : constant System.Address :=
          Get_CLINT_Base
          + To_Address (
             Storage_Elements.Integer_Address(
                Get_MSIP_Offset + Hart_ID * 4));
-      MSIP_Reg : MSIP_Ptr := MSIP_Ptr'Unchecked_Conversion(Addr);
+      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr(Addr);
    begin
       if not CLINT_Enabled then
          return;
@@ -147,12 +152,17 @@ package body Arch.CLINT with SPARK_Mode => Off is
       type MSIP_Type is new Unsigned_32;
       pragma Volatile (MSIP_Type);
       type MSIP_Ptr is access all MSIP_Type;
+      -- conversion from Address ⇒ MSIP_Ptr
+      function To_MSIP_Ptr is new Ada.Unchecked_Conversion(
+         Source => System.Address,
+         Target => MSIP_Ptr
+      );
       Addr : constant System.Address :=
          Get_CLINT_Base
          + To_Address (
             Storage_Elements.Integer_Address(
                Get_MSIP_Offset + Hart_ID * 4));
-      MSIP_Reg : MSIP_Ptr := MSIP_Ptr (Addr);
+      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
    begin
       if not CLINT_Enabled then
          return False;
@@ -164,13 +174,18 @@ package body Arch.CLINT with SPARK_Mode => Off is
       type Time_Type is new Unsigned_64;
       pragma Volatile (Time_Type);
       type Time_Ptr is access all Time_Type;
+      -- conversion from Address ⇒ Time_Ptr
+      function To_Time_Ptr is new Ada.Unchecked_Conversion(
+         Source => System.Address,
+         Target => Time_Ptr
+      );
       Addr : constant Address :=
          Get_CLINT_Base
             + To_Address(
                Storage_Elements.Integer_Address (
                   Get_MSIP_Offset + Hart_ID * 4)
                );
-      Time_Reg : Time_Ptr := Time_Ptr (Addr);
+      Time_Reg : Time_Ptr := To_Time_Ptr (Addr);
    begin
       if not CLINT_Enabled then
          return 0;
