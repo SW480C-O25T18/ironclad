@@ -15,103 +15,111 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with System;
-with System.Storage_Elements;
-with Interfaces;
+with System;                   use System;
+with System.Storage_Elements;  use System.Storage_Elements;
+with Interfaces;               use Interfaces;
 with Ada.Unchecked_Conversion;
 with System.Machine_Code;
 with Arch.Debug;
 
 package body Arch.CLINT with SPARK_Mode => Off is
 
-   subtype Address                is System.Address;
-   subtype Integer_Address       is System.Storage_Elements.Integer_Address;
-   subtype Unsigned_64           is Interfaces.Unsigned_64;
-   subtype Unsigned_32           is Interfaces.Unsigned_32;
-
-   --  CLINT configuration record
+   --------------------------------------------------------------------------
+   --  CLINT Configuration Record
+   --------------------------------------------------------------------------
    type CLINT_Rec is record
       Base_Address    : Address;
       MSIP_Offset     : Unsigned_64;
       MTime_Offset    : Unsigned_64;
-      MTimecmp_Offset : Unsigned_64;
+      MTimeCmp_Offset : Unsigned_64;
       Enabled         : Boolean;
    end record;
 
    CLINT_State : CLINT_Rec := (
-      Base_Address    => System'To_Address (16#0200_0000#),
+      Base_Address    => To_Address (16#0200_0000#),
       MSIP_Offset     => 0,
       MTime_Offset    => 16#BFF8#,
-      MTimecmp_Offset => 16#4000#,
+      MTimeCmp_Offset => 16#4000#,
       Enabled         => True
    );
 
-   --  Helpers to convert between Address and Unsigned_64
-   function Addr_To_U64 is new Ada.Unchecked_Conversion (Source => Address,
-                                                          Target => Unsigned_64);
-   function U64_To_Addr is new Ada.Unchecked_Conversion (Source => Unsigned_64,
-                                                        Target => Address);
+   --------------------------------------------------------------------------
+   --  Address <=> Unsigned_64 conversion helpers
+   --------------------------------------------------------------------------
+   function Addr_To_U64 is new Ada.Unchecked_Conversion(
+      Source => Address,
+      Target => Unsigned_64
+   );
 
-   --  Volatile register type
+   function U64_To_Addr is new Ada.Unchecked_Conversion(
+      Source => Unsigned_64,
+      Target => Address
+   );
+
+   --------------------------------------------------------------------------
+   --  Volatile MMIO register access
+   --------------------------------------------------------------------------
    type Reg_Type is new Unsigned_64;
    pragma Volatile (Reg_Type);
-   type Reg_Ptr  is access all Reg_Type;
+   type Reg_Ptr is access all Reg_Type;
 
-   --  Convert an absolute address to a volatile pointer
-   function To_Reg_Ptr is new Ada.Unchecked_Conversion (Source => Address,
-                                                       Target => Reg_Ptr);
+   function To_Reg_Ptr is new Ada.Unchecked_Conversion(
+      Source => Address,
+      Target => Reg_Ptr
+   );
 
-   function Reg (Abs : Address) return Reg_Ptr is
+   function Reg (Addr : Address) return Reg_Ptr is
    begin
-      Arch.Debug.Print ("CLINT.Reg: 0x" &
-         Interfaces.Unsigned_64'Image (Addr_To_U64 (Abs)));
-      return To_Reg_Ptr (Abs);
+      Arch.Debug.Print (
+         "clint.Reg: addr=0x" & Unsigned_64'Image (Addr_To_U64 (Addr))
+      );
+      return To_Reg_Ptr (Addr);
    end Reg;
 
-   --  Memory barrier (RISC-V FENCE)
+   --------------------------------------------------------------------------
+   --  Memory barrier (fence)
+   --------------------------------------------------------------------------
    procedure Memory_Barrier is
    begin
-      System.Machine_Code.Asm ("fence", Volatile => True, Clobber => "memory");
-      Arch.Debug.Print ("CLINT.Memory_Barrier");
+      System.Machine_Code.Asm (
+         "fence",
+         Volatile => True,
+         Clobber  => "memory"
+      );
+      Arch.Debug.Print ("clint.Memory_Barrier executed");
    end Memory_Barrier;
 
-   -----------------------------------------------------------------------------
-   --  Software interrupt (MSIP)
-   -----------------------------------------------------------------------------
-
-   procedure Set_Software_Interrupt (Hart_ID : Unsigned_64;
-                                     Value   : Boolean) is
-      --  MSIP is a 32-bit register at Base + MSIP_Offset + 4*Hart_ID
-      type MSIP_Type is new Interfaces.Unsigned_32;
-      pragma Volatile (MSIP_Type);
-      type MSIP_Ptr is access all MSIP_Type;
-      function To_MSIP_Ptr is new Ada.Unchecked_Conversion (Source => Address,
-                                                           Target => MSIP_Ptr);
-
-      Base_Int  : constant Integer_Address :=
-                    Integer_Address (CLINT_State.Base_Address);
-      Raw_Off   : constant Integer_Address :=
-                    Base_Int
-                  + Integer_Address (CLINT_State.MSIP_Offset)
-                  + Integer_Address (Hart_ID * 4);
-      MSIP_Addr : constant Address := System.Storage_Elements.To_Address (Raw_Off);
-      Reg_P     : MSIP_Ptr  := To_MSIP_Ptr (MSIP_Addr);
+   --------------------------------------------------------------------------
+   --  Software Interrupt (MSIP) Management
+   --------------------------------------------------------------------------
+   procedure Set_Software_Interrupt (
+     Hart_ID : Unsigned_64;
+     Value   : Boolean
+   ) is
+      Base_Int : constant Integer_Address :=
+        Integer_Address (CLINT_State.Base_Address);
+      Raw_Off  : constant Integer_Address :=
+         Base_Int
+       + Integer_Address (Natural (CLINT_State.MSIP_Offset))
+       + Integer_Address (Natural (Hart_ID * 4));
+      Addr     : constant Address := To_Address (Raw_Off);
+      MSIP_Reg : Reg_Ptr := Reg (Addr);
    begin
       if not CLINT_State.Enabled then
-         Arch.Debug.Print ("CLINT.Set_Software_Interrupt: disabled");
+         Arch.Debug.Print ("clint.Set_Software_Interrupt: disabled");
          return;
       end if;
-
       if Value then
-         Reg_P.all := 1;
+         MSIP_Reg.all := 1;
       else
-         Reg_P.all := 0;
+         MSIP_Reg.all := 0;
       end if;
-
-      Arch.Debug.Print ("CLINT.Set_Software_Interrupt: Hart=" &
-         Unsigned_64'Image (Hart_ID) & " => " & Boolean'Image (Value));
-
       Memory_Barrier;
+      Arch.Debug.Print (
+         "clint.Set_Software_Interrupt: hart=" &
+         Unsigned_64'Image (Hart_ID) &
+         " value=" & Boolean'Image (Value)
+      );
    end Set_Software_Interrupt;
 
    procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64) is
@@ -119,93 +127,84 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Set_Software_Interrupt (Hart_ID, False);
    end Clear_Software_Interrupt;
 
-   function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean is
-      --  same address calc as Set
-      type MSIP_Type is new Interfaces.Unsigned_32;
-      pragma Volatile (MSIP_Type);
-      type MSIP_Ptr is access all MSIP_Type;
-      function To_MSIP_Ptr is new Ada.Unchecked_Conversion (Source => Address,
-                                                           Target => MSIP_Ptr);
-
-      Base_Int  : constant Integer_Address :=
-                    Integer_Address (CLINT_State.Base_Address);
-      Raw_Off   : constant Integer_Address :=
-                    Base_Int
-                  + Integer_Address (CLINT_State.MSIP_Offset)
-                  + Integer_Address (Hart_ID * 4);
-      MSIP_Addr : constant Address := System.Storage_Elements.To_Address (Raw_Off);
-      Reg_P     : MSIP_Ptr  := To_MSIP_Ptr (MSIP_Addr);
+   function Read_Software_Interrupt (
+     Hart_ID : Unsigned_64
+   ) return Boolean is
+      Base_Int : constant Integer_Address :=
+        Integer_Address (CLINT_State.Base_Address);
+      Raw_Off  : constant Integer_Address :=
+         Base_Int
+       + Integer_Address (Natural (CLINT_State.MSIP_Offset))
+       + Integer_Address (Natural (Hart_ID * 4));
+      Addr     : constant Address := To_Address (Raw_Off);
+      MSIP_Reg : Reg_Ptr := Reg (Addr);
    begin
       if not CLINT_State.Enabled then
          return False;
       end if;
-      return Reg_P.all /= 0;
+      return MSIP_Reg.all /= 0;
    end Read_Software_Interrupt;
 
-   -----------------------------------------------------------------------------
-   --  Timer (MTIME & MTIMECMP)
-   -----------------------------------------------------------------------------
-
+   --------------------------------------------------------------------------
+   --  Timer (mtime/mtimecmp) Management
+   --------------------------------------------------------------------------
    function Get_MTime return Unsigned_64 is
-      type T is new Unsigned_64; pragma Volatile (T);
-      type TP is access all T;
-      function To_TP is new Ada.Unchecked_Conversion (Source => Address,
-                                                     Target => TP);
-
-      Base_Int  : constant Integer_Address :=
-                    Integer_Address (CLINT_State.Base_Address);
-      Raw_Off   : constant Integer_Address :=
-                    Base_Int + Integer_Address (CLINT_State.MTime_Offset);
-      Addr      : constant Address := System.Storage_Elements.To_Address (Raw_Off);
-      R         : TP      := To_TP (Addr);
+      Base_Int : constant Integer_Address :=
+        Integer_Address (CLINT_State.Base_Address);
+      Raw_Off  : constant Integer_Address :=
+         Base_Int + Integer_Address (Natural (CLINT_State.MTime_Offset));
+      Addr     : constant Address := To_Address (Raw_Off);
+      Time_Reg : Reg_Ptr := Reg (Addr);
    begin
       if not CLINT_State.Enabled then
          return 0;
       end if;
-      return R.all;
+      return Time_Reg.all;
    end Get_MTime;
 
-   procedure Set_Timer_Compare (Hart_ID : Unsigned_64;
-                                Time    : Unsigned_64) is
-      type T is new Unsigned_64; pragma Volatile (T);
-      type TP is access all T;
-      function To_TP is new Ada.Unchecked_Conversion (Source => Address,
-                                                     Target => TP);
-
-      Base_Int  : constant Integer_Address :=
-                    Integer_Address (CLINT_State.Base_Address);
-      Raw_Off   : constant Integer_Address :=
-                    Base_Int
-                  + Integer_Address (CLINT_State.MTimecmp_Offset)
-                  + Integer_Address (Hart_ID * 8);
-      Addr      : constant Address := System.Storage_Elements.To_Address (Raw_Off);
-      R         : TP      := To_TP (Addr);
+   procedure Set_Timer_Compare (
+     Hart_ID : Unsigned_64;
+     Time    : Unsigned_64
+   ) is
+      Base_Int : constant Integer_Address :=
+        Integer_Address (CLINT_State.Base_Address);
+      -- Compute offset = mtimecmp_offset + hart_id * 8
+      Off_U64  : constant Unsigned_64 :=
+        CLINT_State.MTimeCmp_Offset + Hart_ID * 8;
+      Raw_Off  : constant Integer_Address :=
+        Base_Int + Integer_Address (Natural (Off_U64));
+      Addr     : constant Address := To_Address (Raw_Off);
+      Cmp_Reg  : Reg_Ptr := Reg (Addr);
    begin
-      R.all := Time;
-      Arch.Debug.Print ("CLINT.Set_Timer_Compare: Hart=" &
-         Unsigned_64'Image (Hart_ID) & " => " & Unsigned_64'Image (Time));
+      if not CLINT_State.Enabled then
+         Arch.Debug.Print ("clint.Set_Timer_Compare: disabled");
+         return;
+      end if;
+      Cmp_Reg.all := Time;
       Memory_Barrier;
+      Arch.Debug.Print (
+         "clint.Set_Timer_Compare: hart=" &
+         Unsigned_64'Image (Hart_ID) &
+         " time=" & Unsigned_64'Image (Time)
+      );
    end Set_Timer_Compare;
 
-   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64 is
-      type T is new Unsigned_64; pragma Volatile (T);
-      type TP is access all T;
-      function To_TP is new Ada.Unchecked_Conversion (Source => Address,
-                                                     Target => TP);
-
-      Base_Int  : constant Integer_Address :=
-                    Integer_Address (CLINT_State.Base_Address);
-      Raw_Off   : constant Integer_Address :=
-                    Base_Int
-                  + Integer_Address (CLINT_State.MTimecmp_Offset)
-                  + Integer_Address (Hart_ID * 8);
-      Addr      : constant Address := System.Storage_Elements.To_Address (Raw_Off);
-      R         : TP      := To_TP (Addr);
+   function Get_Timer_Compare (
+     Hart_ID : Unsigned_64
+   ) return Unsigned_64 is
+      Base_Int : constant Integer_Address :=
+        Integer_Address (CLINT_State.Base_Address);
+      Off_U64  : constant Unsigned_64 :=
+        CLINT_State.MTimeCmp_Offset + Hart_ID * 8;
+      Raw_Off  : constant Integer_Address :=
+        Base_Int + Integer_Address (Natural (Off_U64));
+      Addr     : constant Address := To_Address (Raw_Off);
+      Cmp_Reg  : Reg_Ptr := Reg (Addr);
    begin
       if not CLINT_State.Enabled then
          return 0;
       end if;
-      return R.all;
+      return Cmp_Reg.all;
    end Get_Timer_Compare;
 
 end Arch.CLINT;
