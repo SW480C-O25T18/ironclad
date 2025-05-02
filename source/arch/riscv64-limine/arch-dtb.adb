@@ -25,7 +25,6 @@ with Interfaces; use Interfaces;
 with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
 with Ada.Unchecked_Conversion;
-with Ada.Exceptions; use Ada.Exceptions;
 with Arch.Limine;
 with Arch.Debug;
 

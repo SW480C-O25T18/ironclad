@@ -16,13 +16,20 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with System; use System;
-with System.Storage_Elements; use System.Storage_Elements;
 with Interfaces; use Interfaces;
 with Ada.Unchecked_Conversion;
 with System.Machine_Code; use System.Machine_Code;
 with Arch.Debug;
 
 package body Arch.CLINT with SPARK_Mode => Off is
+
+   --  Conversion functions
+   function Address_To_U64 is 
+      new Ada.Unchecked_Conversion (
+         System.Address, Unsigned_64);
+   function U64_To_Address is 
+      new Ada.Unchecked_Conversion (
+         Unsigned_64, System.Address);
 
    -----------------------------------------------------------------------------
    --  CLINT Configuration Record
@@ -60,11 +67,11 @@ package body Arch.CLINT with SPARK_Mode => Off is
    --  CLINT Configuration Procedures
    -----------------------------------------------------------------------------
    procedure Set_CLINT_Configuration (
-      Base_Address     : System.Address;
-      MSIP_Offset      : Unsigned_64;
-      MTime_Offset     : Unsigned_64;
-      MTimecmp_Offset  : Unsigned_64;
-      Enabled          : Boolean
+      Base_Address     : System.Address := System'To_Address(16#02000000#);
+      MSIP_Offset      : Unsigned_64   := 0;
+      MTime_Offset     : Unsigned_64   := 16#BFF8#;
+      MTimecmp_Offset  : Unsigned_64   := 16#4000#;
+      Enabled          : Boolean       := True
    ) is
    begin
       CLINT_State.Base_Address    := Base_Address;
