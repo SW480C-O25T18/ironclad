@@ -30,7 +30,6 @@ with Lib.Panic;
 with Scheduler;
 with Userland.Syscall;     use Userland.Syscall;
 with Ada.Interrupts;       use Ada.Interrupts;
-with Ada.Exceptions;       use Ada.Exceptions;
 
 package body Arch.Interrupts with SPARK_Mode => Off is
 
@@ -128,14 +127,18 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    --
    -- Called during system initialization.
    ------------------------------------------------------------------------------
+
+   Has_CLINT : Boolean := False;
+   Has_PLIC  : Boolean := False;
+
    procedure Initialize is
       Num_Harts : constant Unsigned_64 := Arch.Local.Get_Hart_Count;
    begin
-      CLINT_Enabled := Arch.CLINT.CLINT_Enabled;
-      PLIC_Enabled  := Arch.PLIC.Is_Enabled;
+      Has_CLINT := Arch.CLINT.CLINT_Enabled;
+      Has_PLIC  := Arch.PLIC.Is_Enabled;
 
-      if CLINT_Enabled or PLIC_Enabled then
-         if CLINT_Enabled then
+      if Has_CLINT or Has_PLIC then
+         if Has_CLINT then
             Arch.CLINT.Set_CLINT_Configuration;
             for Hart_ID in 0 .. Num_Harts - 1 loop
                Arch.CLINT.Initialize_Hart(Hart_ID);
@@ -143,7 +146,7 @@ package body Arch.Interrupts with SPARK_Mode => Off is
             end loop;
          end if;
 
-         if PLIC_Enabled then
+         if Has_PLIC then
             Arch.PLIC.Set_PLIC_Configuration;
             for Hart_ID in 0 .. Num_Harts - 1 loop
                Arch.PLIC.Initialize(Hart_ID, Get_Current_Context);
@@ -281,7 +284,7 @@ package body Arch.Interrupts with SPARK_Mode => Off is
       Arch.Debug.Print("Handle_Interrupt: Starting interrupt handler");
 
       -- Process CLINT interrupts (software and timer)
-      if CLINT_Enabled and (Cause = CLINT_SW_INT_CODE or Cause = CLINT_TIMER_INT_CODE1 or Cause = CLINT_TIMER_INT_CODE2) then
+      if Has_CLINT and (Cause = CLINT_SW_INT_CODE or Cause = CLINT_TIMER_INT_CODE1 or Cause = CLINT_TIMER_INT_CODE2) then
          case Cause is
             when CLINT_SW_INT_CODE =>
                Arch.Debug.Print("Handle_Interrupt: CLINT software interrupt detected");
@@ -298,7 +301,7 @@ package body Arch.Interrupts with SPARK_Mode => Off is
       end if;
             
       -- Process PLIC external interrupts if enabled
-      if PLIC_Enabled and (Cause = PLIC_EXT_INT_CODE1 or Cause = PLIC_EXT_INT_CODE2) then
+      if Has_PLIC and (Cause = PLIC_EXT_INT_CODE1 or Cause = PLIC_EXT_INT_CODE2) then
          case Cause is
             when PLIC_EXT_INT_CODE1 | PLIC_EXT_INT_CODE2 =>
                Arch.Debug.Print("Handle_Interrupt: External interrupt (PLIC) detected");
@@ -310,7 +313,11 @@ package body Arch.Interrupts with SPARK_Mode => Off is
                      IRQ_Counts(IRQ) := IRQ_Counts(IRQ) + 1;
                      if IRQ_Table(IRQ) /= null then
                         Arch.Debug.Print("Handle_Interrupt: Dispatching IRQ " & Integer'Image(IRQ));
-                        IRQ_Table(IRQ).all;
+                        if IRQ_Table(IRQ) /= null then
+                           IRQ_Table(IRQ).Invokes.all;
+                        else
+                           Arch.Debug.Print("Handle_Interrupt: No handler registered for IRQ " & Integer'Image(IRQ));
+                        end if;
                         Arch.Debug.Print("Handle_Interrupt: IRQ " & Integer'Image(IRQ) & " handler executed");
                      else
                         Arch.Debug.Print("Handle_Interrupt: No handler registered for IRQ " & Integer'Image(IRQ));

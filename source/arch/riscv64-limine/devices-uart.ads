@@ -20,7 +20,7 @@ with Memory; use Memory;
 
 package Devices.UART with SPARK_Mode => Off is
    --  Early initialization of UART0 for early kernel output.
-   function Init_UART0 return Boolean;
+   procedure Init_UART0;
 
    --  Print a character.
    procedure Write_UART0 (Message : Character);
@@ -28,6 +28,7 @@ package Devices.UART with SPARK_Mode => Off is
    --  Print a string.
    procedure Write_UART0 (Message : String);
 
+   procedure Read_UART0_Line (Line : out String);
 private
 
    UART_Base : constant :=  16#10000000#;

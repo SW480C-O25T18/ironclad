@@ -27,6 +27,7 @@ with System.Storage_Elements; use System.Storage_Elements;
 with Ada.Unchecked_Conversion;
 with Arch.Limine;
 with Arch.Debug;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 package body Arch.DTB with SPARK_Mode => Off is
 
@@ -200,7 +201,7 @@ package body Arch.DTB with SPARK_Mode => Off is
    function Init return Boolean is
       type HDR_Ptr is access all FDT_Header;
       function To_HDR_Ptr is new Ada.Unchecked_Conversion(Address, HDR_Ptr);
-      HDR : HDR_Ptr := To_HDR_Ptr(Arch.Limine.DTB_Response.DTB_Addr);
+      HDR : HDR_Ptr := To_HDR_Ptr(DTB_Response.DTB_Addr);
    begin
       if HDR = null then
          Arch.Debug.Print("Init: No DTB response");
