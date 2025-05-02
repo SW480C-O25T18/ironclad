@@ -186,12 +186,12 @@ package body Arch.Entrypoint is
       -- Memory Map Dump
       begin
          Arch.Debug.Print ("[Stage 6] Dumping physical memory map:");
+         Addr := Info.Memmap [1 .. Info.Memmap_Len];
+         Addr := E.Start + E.Length;
          for E of Info.Memmap [1 .. Info.Memmap_Len] loop
-            Addr := E.Start + E.Length;
             Arch.Debug.Print (
-              "[" & Unsigned_To_String (Address_To_U64 (E.Start))
-              & " - " & Unsigned_To_String (Address_To_U64 (Addr))
-              & "] " & Boot_Memory_Type'Image (E.MemType)
+               "[" & E.Start'Image & " - " & Addr'Image & "] " &
+               Boot_Memory_Type'Image (E.MemType)
             );
          end loop;
          Arch.Debug.Print ("[Stage 6] Memory map dump complete");
