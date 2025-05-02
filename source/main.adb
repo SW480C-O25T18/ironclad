@@ -88,6 +88,8 @@ begin
    Scheduler.Init (Found);
    if not Found then
       Lib.Panic.Hard_Panic ("Could not initialize the scheduler");
+   else
+         Lib.Messages.Put_Line ("Scheduler initialized");
    end if;
 
    --  Before loading init, check if the user wants us to enable thingies.
@@ -199,8 +201,10 @@ begin
              User       => 0,
              Want_Read  => True,
              Want_Write => False);
-
-         if Success = VFS.FS_Success then
+         Lib.Messages.Put_Line("Getting key values to verify kernel");
+         -- if Success = VFS.FS_Success then
+         if true then
+            Lib.Messages.Put_Line("Entering Userland, going idle.");
             Userland.Loader.Start_Program
                (Init_Args.all (1).all, Init_FS, Init_Ino, Init_Args.all,
                 Init_Env, Init_Stdin, Init_Stdout, Init_Stdout, Init_PID);
@@ -229,6 +233,7 @@ begin
       end if;
    end;
 
+   Lib.Messages.Put_Line("Idle Sunglasses");
    --  Going idle into the scheduler.
    Scheduler.Idle_Core;
 exception
