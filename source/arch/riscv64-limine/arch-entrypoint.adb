@@ -164,9 +164,9 @@ package body Arch.Entrypoint is
       -- Allocators & MMU Initialization
       begin
          Arch.Debug.Print ("[Stage 4] Initializing allocators and MMU...");
-         Memory.Physical.Init_Allocator (Info.Memmap [1 .. Info.Memmap_Len]);
+         Memory.Physical.Init_Allocator (Info.Memmap (Info.Memmap'Range));
          Arch.Debug.Print ("[Stage 4] Physical allocator initialized");
-         if not Arch.MMU.Init (Info.Memmap [1 .. Info.Memmap_Len]) then
+         if not Arch.MMU.Init (Info.Memmap) then
             Lib.Panic.Hard_Panic ("The VMM could not be initialized");
          end if;
          Arch.Debug.Print ("[Stage 4] MMU initialized successfully");
@@ -186,9 +186,13 @@ package body Arch.Entrypoint is
       -- Memory Map Dump
       begin
          Arch.Debug.Print ("[Stage 6] Dumping physical memory map:");
-         Addr := Info.Memmap [1 .. Info.Memmap_Len];
-         Addr := E.Start + E.Length;
+         if Info.Memmap'Length > 0 then
+            Addr := Info.Memmap (1).Start + Info.Memmap (1).Length;
+         else
+            Arch.Debug.Print ("[Warning] Memmap is empty");
+         end if;
          for E of Info.Memmap [1 .. Info.Memmap_Len] loop
+            Addr := E.Start + E.Length;
             Arch.Debug.Print (
                "[" & E.Start'Image & " - " & Addr'Image & "] " &
                Boot_Memory_Type'Image (E.MemType)
