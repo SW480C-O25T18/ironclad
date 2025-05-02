@@ -23,14 +23,6 @@ with Arch.Debug;
 
 package body Arch.CLINT with SPARK_Mode => Off is
 
-   --  Conversion functions
-   function Address_To_U64 is 
-      new Ada.Unchecked_Conversion (
-         System.Address, Unsigned_64);
-   function U64_To_Address is 
-      new Ada.Unchecked_Conversion (
-         Unsigned_64, System.Address);
-
    -----------------------------------------------------------------------------
    --  CLINT Configuration Record
    -----------------------------------------------------------------------------
