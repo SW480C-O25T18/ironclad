@@ -18,6 +18,17 @@ with System; use System;
 with Interfaces; use Interfaces;
 
 package Arch.CLINT is
+
+   type CLINT_State_Type is record
+      Base_Address    : System.Address;
+      MSIP_Offset     : Unsigned_64;
+      MTime_Offset    : Unsigned_64;
+      MTimecmp_Offset : Unsigned_64;
+      Enabled         : Boolean;
+   end record;
+
+   CLINT_State : CLINT_State_Type;
+
    --  Set CLINT configuration dynamically.
    procedure Set_CLINT_Configuration
      (Base_Address     : System.Address := System'To_Address(16#02000000#);

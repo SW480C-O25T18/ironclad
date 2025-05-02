@@ -14,9 +14,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces; -- For Unsigned_64 and other types
-with System; -- For System.Address and related utilities
-with Arch; -- For accessing CLINT_State and other architecture-specific definitions
+with System.Machine_Code; use System.Machine_Code;
 with Arch.Debug; -- For debug printing
 with Ada.Unchecked_Conversion; -- For Address and Unsigned_64 conversions
 
@@ -71,6 +69,13 @@ package body Arch.CLINT is
       return CLINT_State.Enabled;
    end CLINT_Enabled;
 
+   --  Memory Barrier.
+   procedure Memory_Barrier is
+   begin
+      Asm ("fence", Volatile => True, Clobber => "memory");
+      Arch.Debug.Print("CLINT: Memory barrier executed");
+   end Memory_Barrier;
+
    --  MMIO Access.
    type Reg_Type is new Unsigned_64;
    pragma Volatile (Reg_Type);
@@ -116,10 +121,10 @@ package body Arch.CLINT is
    --  Timer.
    function Get_MTime return Unsigned_64 is
       Addr : constant System.Address := U64_To_Address(
-        Address_To_U64(Get_CLINT_Base) + Get_MTime_Offset);
+      Address_To_U64(Get_CLINT_Base) + Get_MTime_Offset);
       R : Reg_Ptr := Reg(Addr);
    begin
-      return R.all;
+      return Unsigned_64(R.all); -- Explicit conversion
    end Get_MTime;
 
    procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64) is
@@ -139,12 +144,5 @@ package body Arch.CLINT is
    begin
       return R.all;
    end Get_Timer_Compare;
-
-   --  Memory Barrier.
-   procedure Memory_Barrier is
-   begin
-      Asm ("fence", Volatile => True, Clobber => "memory");
-      Arch.Debug.Print("CLINT: Memory barrier executed");
-   end Memory_Barrier;
 
 end Arch.CLINT;
