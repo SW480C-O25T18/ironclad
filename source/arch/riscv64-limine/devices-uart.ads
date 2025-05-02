@@ -28,6 +28,7 @@ package Devices.UART with SPARK_Mode => Off is
    --  Print a string.
    procedure Write_UART0 (Message : String);
 
+   procedure Read_UART0_Line (Line : out String);
 private
 
    UART_Base : constant :=  16#10000000#;

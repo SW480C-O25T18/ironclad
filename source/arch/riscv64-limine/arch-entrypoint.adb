@@ -40,16 +40,24 @@ package body Arch.Entrypoint is
 
       Lib.Messages.Put_Line ("Hello");
 
-      loop null; end loop;
+      --  declare
+      --     Received_Line : String (1 .. 100);
+      --  begin
+      --     Devices.UART.Read_UART0_Line(Received_Line);
+      --     Lib.Messages.Put_Line(Received_Line);
+      --  end;
 
       --  Translate the limine protocol into arch-agnostic structures.
       Limine.Translate_Proto;
 
+
       --  Initialize device discovery facilities.
       Debug.Print ("Initializing DTB discovery");
-      if not Arch.DTB.Init then
-         Lib.Panic.Hard_Panic ("No DTB was found!");
-      end if;
+      -- if not Arch.DTB.Init then
+      --   Lib.Panic.Hard_Panic ("No DTB was found!");
+      -- end if;
+
+
 
       --  Initialize the allocators and MMU.
       Debug.Print ("Initializing allocators and MMU");
@@ -61,6 +69,8 @@ package body Arch.Entrypoint is
          Lib.Panic.Hard_Panic ("The VMM could not be initialized");
       end if;
       Debug.Print ("MMU initialized");
+
+            Lib.Messages.Put_Line ("allocator initialized");
 
       --  Enable dmesg buffers and KASAN if wanted.
       Debug.Print ("Enabling logging");
