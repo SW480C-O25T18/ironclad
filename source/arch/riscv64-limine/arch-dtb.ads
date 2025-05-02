@@ -21,6 +21,7 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Interfaces; use Interfaces;
+with Arch.Limine;
 
 package Arch.DTB with SPARK_Mode => Off is
 
