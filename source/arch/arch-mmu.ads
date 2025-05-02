@@ -18,6 +18,7 @@ with Interfaces; use Interfaces;
 with System;     use System;
 with Memory;     use Memory;
 with Lib.Synchronization;
+with Ada.Unchecked_Conversion;
 
 package Arch.MMU is
    --  Permissions used for mapping.
@@ -41,6 +42,8 @@ package Arch.MMU is
    --  Types to represent page tables.
    type Page_Table     is private;
    type Page_Table_Acc is access all Page_Table;
+
+   type Satp_Register is private;
 
    --  Default minimum page size supported by the MMU. Ports may use bigger
    --  pages optionally if possible for optimization, but this size is always
@@ -216,11 +219,7 @@ private
       type U26 is mod 2**26 with Size => 26;
 
       type U7 is mod 2**7 with Size => 7;
-      type u64 is mod 2**64 with Size => 64;
-      
-      type U4 is mod 2**4 with Size => 4;
-      type U16 is mod 2**16 with Size => 16;
-      type U44 is mod 2**44 with Size => 44;
+      --  type u64 is mod 2**64 with Size => 64;
       
       type U4 is mod 2**4 with Size => 4;
       type U16 is mod 2**16 with Size => 16;
@@ -268,12 +267,36 @@ private
 
       type Page_Level_Acc is access all Page_Level;
 
-      subtype Page_Level_Count is u64 range 1 .. 3;
+      subtype Page_Level_Count is U4 range 1 .. 3;
+
+      --  arch‑mmu.ads  (inside the RISC‑V branch)
+
+   type Page_Table_Entry_Access is access all Page_Table_Entry;
+
+
+   function Addr_To_PTE_Access is new
+   Ada.Unchecked_Conversion (System.Address, Page_Table_Entry_Access);
+
+   function Get_Page           --  <<<<  moved here so the body matches
+   (Map      : Page_Table_Acc;
+      Virtual  : Virtual_Address;
+      Allocate : Boolean) return Page_Table_Entry_Access;
+
+   function Inner_Map_Range    --  <<<<  likewise
+   (Map            : Page_Table_Acc;
+      Physical_Start : System.Address;
+      Virtual_Start  : System.Address;
+      Length         : Storage_Count;
+      Permissions    : Page_Permissions;
+      Caching        : Caching_Model) return Boolean;
+
+   --  procedure Flush_Global_TLBs (Addr : System.Address; Len : Storage_Count);
+
 
       type Page_Table is record
-         Root               : u64 := 0; -- starts at Satp_CSR
+         Root               : Unsigned_64 := 0; -- starts at Satp_CSR
          Page_Level         : Page_Level_Count := 1; --default should be 1
-         --  Satp_CSR           : u64 := 0; --bits leave empty for now
+         --  Satp_CSR           : Unsigned_64 := 0; --bits leave empty for now
          Page_Table_Entries : Page_Level_Acc;
          Mutex           : aliased Lib.Synchronization.Readers_Writer_Lock;
       end record;
@@ -290,9 +313,15 @@ private
          PPN at 0 range 0 .. 43;
       end record;
 
-      function Extract_Satp_Data (Addr : u64) return Satp_Register;
       function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address;
+
+      function Extract_Satp_Data (Addr : Unsigned_64) return Satp_Register;
       function Combine_Satp_Data(S : Satp_Register) return Unsigned_64;
+
+      function Get_Next_Level(Current_Level       : Physical_Address;
+                              Index               : Unsigned_64;
+                              Create_If_Not_Found : Boolean) 
+                              return Physical_Address;
 
    #elsif ArchName = """x86_64-limine"""
       type PML4 is array (1 .. 512) of Unsigned_64 with Size => 512 * 64;

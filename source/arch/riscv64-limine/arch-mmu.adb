@@ -14,45 +14,30 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 with Memory;
+with Interfaces; use Interfaces;
+with Arch.Snippets;
+with Lib.Panic;
+with Arch.Limine;
+with Ada.Unchecked_Conversion;
+
 package body Arch.MMU is
 
    Global_Kernel_Usage : Memory.Size := 0;
    Global_Table_Usage  : Memory.Size := 0;
 
-   function Extract_Physical_Addr (PTE : Page_Table_Entry) return Interfaces.C.size_t is
-      use type Interfaces.C.size_t;
-      use type u64;
-      PPN : u64;
+   function Extract_Physical_Addr (PTE : Page_Table_Entry) return Physical_Address is
+      use type Unsigned_64;
+      PPN : Unsigned_64;
    begin
-      PPN := u64(PTE.PPN0) or Shift_Left(u64(PTE.PPN1), 9) or Shift_Left(u64(PTE.PPN2), 18);
+      PPN := Unsigned_64(PTE.PPN0) or Shift_Left(Unsigned_64(PTE.PPN1), 9) or Shift_Left(Unsigned_64(PTE.PPN2), 18);
       
-      return Interfaces.C.size_t(Shift_Left(PPN, 12)); -- change to use Physical_Address()
+      return Physical_Address (Shift_Left (PPN, 12));
    end Extract_Physical_Addr;
 
-<<<<<<< HEAD
-   function Extract_Satp_Data (Satp_Content : u64) return Satp_Register is
+   function Extract_Satp_Data (Addr : Unsigned_64) return Satp_Register is
       Result : Satp_Register;
-=======
-   function Extract_Satp_Data (Addr : u64) return Satp_Register is
-      Result : Satp_Register;
-   begin
-      -- Bits 60..63 => Sv_Type
-      Result.Sv_Type := U4((Shift_Right (Addr, 60)) and 16#F#); 
-
-      -- Bits 44..59 => ASID (16 bits)
-      Result.ASID := U16((Shift_Right(Addr, 44)) and 16#FFFF#); 
-
-      -- Bits 0..43 => PPN (44 bits)
-      -- We can mask off the low 44 bits with (1 << 44) - 1
-      Result.PPN := U44(Addr and ((Shift_Left(1,44)) - 1)); 
-
-      return Result;
-   end Extract_Satp_Data;
-
-   function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
-      pragma Unreferenced (Memmap);
->>>>>>> 5571d86 (updated get satp functions)
    begin
       -- Bits 60..63 => Sv_Type
       Result.Sv_Type := U4((Shift_Right (Addr, 60)) and 16#F#); 
@@ -70,8 +55,8 @@ package body Arch.MMU is
    function Combine_Satp_Data(S : Satp_Register) return Unsigned_64 is
       Val : Unsigned_64;
    begin
-      Val :=   (Shift_Left (u64(S.Sv_Type), 60))
-            or (Shift_Left (u64(S.ASID), 44))
+      Val :=   (Shift_Left (Unsigned_64(S.Sv_Type), 60))
+            or (Shift_Left (Unsigned_64(S.ASID), 44))
             or (Unsigned_64(S.PPN));
       return Val;
    end Combine_Satp_Data;
@@ -120,7 +105,8 @@ function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
    DSAddr : constant Integer_Address := To_Integer (data_start'Address);
 
    --  Physical load address as supplied by the boot loader / SBI
-   Phys : constant Integer_Address := To_Integer (Boot_Info.Get_Load_Phys);
+   Phys   : constant Integer_Address :=
+         To_Integer (Limine.Get_Physical_Address);
 begin
    ----------------------------------------------------------------
    --  3. Allocate an empty three-level page table
@@ -128,7 +114,8 @@ begin
    MMU.Kernel_Table := new Page_Table'
      (Root               => 0,
       Page_Level         => 1,
-      Page_Table_Entries => new Page_Level'(others => (others => 0)),
+      Page_Table_Entries =>
+  new Page_Level'(others => (others => <>)) ,
       Mutex              => Lib.Synchronization.Unlocked_RW_Lock);
 
    ----------------------------------------------------------------
@@ -213,35 +200,42 @@ end Init;
       Addr  : Virtual_Address;
    begin
    while Virt < Final loop
-      PTE_Access := Get_Page (Map, Virt, True);
-      if PTE_Access = null then
-         return False;
-      end if;
-
+      ------------------------------------------------------------
+      --  Declarations first
+      ------------------------------------------------------------
       declare
-         PTE : Page_Table_Entry renames PTE_Access.all;
-         PPN : constant Unsigned_64 := Unsigned_64 (Phys) / 4096;
+         PTE_Access : constant Page_Table_Entry_Access :=
+         Get_Page (Map, Virt, True);
       begin
-         --  Fill physical page number
-         PTE.PPN0 := U9 ( PPN         and 16#1FF#);
-         PTE.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#);
-         PTE.PPN2 := U26(Shift_Right (PPN, 18));
+         ---------------------------------------------------------
+         --  Executable statements
+         ---------------------------------------------------------
+         if PTE_Access = null then
+            return False;
+         end if;
 
-         --  Permissions
-         PTE.R := (if Permissions.Can_Read    then 1 else 0);
-         PTE.W := (if Permissions.Can_Write   then 1 else 0);
-         PTE.X := (if Permissions.Can_Execute then 1 else 0);
-         PTE.U := (if Permissions.Is_User_Accesible then 1 else 0);
-         PTE.G := (if Permissions.Is_Global   then 1 else 0);
-
-         PTE.A := 1;
-         PTE.D := (if Permissions.Can_Write then 1 else 0);
-         PTE.V := 1;
+         declare
+            PTE : Page_Table_Entry renames PTE_Access.all;
+            PPN : constant Unsigned_64 := Unsigned_64 (Phys) / 4096;
+         begin
+            PTE.PPN0 := U9 (PPN              and 16#1FF#);
+            PTE.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#);
+            PTE.PPN2 := U26(Shift_Right (PPN, 18));
+            PTE.R := (if Permissions.Can_Read    then 1 else 0);
+            PTE.W := (if Permissions.Can_Write   then 1 else 0);
+            PTE.X := (if Permissions.Can_Execute then 1 else 0);
+            PTE.U := (if Permissions.Is_User_Accesible then 1 else 0);
+            PTE.G := (if Permissions.Is_Global         then 1 else 0);
+            PTE.A := 1;
+            PTE.D := (if Permissions.Can_Write then 1 else 0);
+            PTE.V := 1;
+         end;
       end;
 
       Virt := Virt + Page_Size;
       Phys := Phys + Page_Size;
    end loop;
+
 
       return True;
    exception
@@ -271,8 +265,9 @@ end Init;
       VPN0 : constant Unsigned_64 :=
                Shift_Right (Addr64 and Shift_Left (16#1FF#, 12), 12);
 
-      L2_Phys : Physical_Address :=
-                  To_Integer (Map.Root'Address) - Memory_Offset;
+      --  L2_Phys : Physical_Address :=
+      --              To_Integer (Map.Root'Address) - Memory_Offset;
+      L2_Phys : Physical_Address := Physical_Address (Map.Root);
       L1_Phys : Physical_Address := Memory.Null_Address;
       L0_Phys : Physical_Address := Memory.Null_Address;
       PTE_VA  : Virtual_Address;
@@ -296,41 +291,95 @@ end Init;
       ----------------------------------------------------------------
       PTE_VA := L0_Phys + Memory_Offset + Physical_Address (VPN0) * 8;
 
-      --  Provide a typed view on that 8-byte slot.
-      declare
-         PTE : aliased Page_Table_Entry
-         with Import, Address => To_Address (PTE_VA);
-      begin
-         return PTE'Access;
-      end;
+      return Addr_To_PTE_Access (To_Address (PTE_VA));
 
    exception
       when Constraint_Error =>
          Lib.Panic.Hard_Panic ("Exception in RISC-V page walk");
    end Get_Page;
 
+   -----------------------------------------------------------------
+   --  Walk/allocate one step down the Sv39 tree.
+   --  Current_Level  : physical base of the table we are looking at.
+   --  Index          : VPN component (0‥511) to pick inside that table.
+   --  Create_If_Not_Found
+   --      = True  → allocate a new 4‑KiB zeroed page if entry empty.
+   --      = False → just return Null_Address if entry empty.
+   --  Return value   : physical address of the child table, or Null_Address.
+   -----------------------------------------------------------------
+   function Get_Next_Level
+   (Current_Level       : Physical_Address;
+      Index               : Unsigned_64;
+      Create_If_Not_Found : Boolean) return Physical_Address
+   is
+      ----------------------------------------------------------------
+      --  Location of the 8‑byte slot in the current table
+      ----------------------------------------------------------------
+      Slot_VA  : constant Virtual_Address :=
+      Current_Level + Memory_Offset + Physical_Address (Index * 8);
 
+      --  pragma Import (Ada, Slot_VA);
 
+      --  A typed view of that slot
+      Slot : Page_Table_Entry
+      with Import, Address => To_Address (Slot_VA);
+   begin
+      --
+      --  Case 1 : already valid and *non‑leaf*
+      --           (R=W=X=0 in Sv39 ==> pointer to next level)
+      --
+      if Slot.V = 1
+      and then Slot.R = 0
+      and then Slot.W = 0
+      and then Slot.X = 0
+      then
+         return Extract_Physical_Addr (Slot);  -- helper described earlier
+      end if;
 
-   --  function Flags_To_Bitmap
-   --  (Perm    : Page_Permissions;
-   --     Caching : Caching_Model) return Unsigned_64
-   --  is
-   --     Result : Unsigned_64 := Page_V or Page_A or Page_D;  -- always valid & A/D
-   --  begin
-   --     --  Basic access bits
-   --     if Perm.Can_Read    then Result := Result or Page_R; end if;
-   --     if Perm.Can_Write   then Result := Result or Page_W; end if;
-   --     if Perm.Can_Execute then Result := Result or Page_X; end if;
-   --     if Perm.Is_User_Accesible then Result := Result or Page_U; end if;
-   --     if Perm.Is_Global        then Result := Result or Page_G; end if;
+      --
+      --  Case 2 : empty entry and caller wants us to allocate
+      --
+      if Create_If_Not_Found then
+         declare
+            Child_Table : constant Page_Level_Acc :=
+            new Page_Level'(others => (others => <>)) ;
+  
 
-   --     --  RISC-V has no per-PTE cache-policy bits; ignore 'Caching'.
-   --     return Result;
-   --  exception
-   --     when Constraint_Error =>
-   --        Lib.Panic.Hard_Panic ("Exception building RISC-V PTE flags");
-   --  end Flags_To_Bitmap;
+            Child_Phys  : constant Physical_Address :=
+            To_Integer (Child_Table.all'Address) - Memory_Offset;
+
+            PPN : constant Unsigned_64 := Unsigned_64 (Child_Phys) / 4096;
+         begin
+            --  Fill the slot as a non‑leaf PTE (only V‑bit set)
+            Slot.PPN0 := U9 (PPN              and 16#1FF#);
+            Slot.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#);
+            Slot.PPN2 := U26(Shift_Right (PPN, 18));
+            Slot.V    := 1;   -- valid
+            Slot.R    := 0;   -- non‑leaf
+            Slot.W    := 0;
+            Slot.X    := 0;
+            Slot.U    := 0;
+            Slot.G    := 0;
+            Slot.A    := 0;
+            Slot.D    := 0;
+
+            Global_Table_Usage :=
+            Global_Table_Usage + (Page_Level'Size / 8);
+
+            return Child_Phys;
+         end;
+      end if;
+
+      --
+      --  Case 3 : entry missing and caller told us not to create
+      --
+      return Memory.Null_Address;
+
+   exception
+      when Constraint_Error =>
+         Lib.Panic.Hard_Panic ("Exception when getting next page level");
+   end Get_Next_Level;
+
 
 
    procedure Fork_Table (Map : Page_Table_Acc; Forked : out Page_Table_Acc) is
@@ -353,18 +402,11 @@ end Init;
 --        Last_Range : Mapping_Range_Acc;
 
 
-<<<<<<< HEAD
 
 --        function Is_Valid_Entry (Map : in out Page_Table_Acc) return Boolean is
 --        begin
 --        return (Map.Page_Table_Entries.V) /= 0;
 --        end Is_Valid_Entry;
-=======
-   begin
- -- todo: adjust to use satp that points to the correct ppn of the root table, should be done in init??
-   -- add lock here
-      Lib.Synchronization.Seize_Writer (Map.Mutex);
->>>>>>> 5571d86 (updated get satp functions)
 
 
 --     begin
@@ -378,21 +420,12 @@ end Init;
 --           return;
 --        end if;
       
-<<<<<<< HEAD
 --        for i in 1 .. 256 loop -- avoid kernel-space entries Page_Table_Entries
 --           declare
 --              L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
 --              L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
 --           begin
 --              if Is_Valid_Entry(L3_Entry) then
-=======
-      for i in 1 .. 256 loop -- avoid kernel-space entries
-         declare
-            L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
-            L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
-         begin
-            if Is_Valid_Entry(L3_Entry) then
->>>>>>> 5571d86 (updated get satp functions)
                
 --                 L2_Phys := Extract_Physical_Addr(L3_Entry);
 
@@ -412,7 +445,6 @@ end Init;
 --                          L1_Phys := Extract_Physical_Addr(L2_Entry);
 --                          --  L1_Virt := To_Address(Memory_Offset + L1_Phys);
 
-<<<<<<< HEAD
 --                          declare
 --                             L1 : Page_Level;
 --                             --  with Import, Address => L1_Virt;
@@ -428,23 +460,6 @@ end Init;
 --                                   Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
 --                                end if;
 --                             end loop;
-=======
-                        declare
-                           L1 : Page_Level;
-                           --  with Import, Address => L1_Virt;
-                        begin
-                           -- Walk all 512 entries in L1
-                           for k in Index_Range loop
-                              L1_Entry_Addr : Unsigned_64 := k * 64;
-                              L1_Entry : Page_Table_Entry with Address => L1_Entry_Addr'Address;
-                              if Is_Valid_Entry(L1_Entry) then
-                                 -- L1(k) references an actual page frame
-                                 Frame_Phys := Extract_Physical_Addr(L1_Entry) + Memory.Memory_Offset;
-                                 -- Free the final data page
-                                 Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
-                              end if;
-                           end loop;
->>>>>>> 5571d86 (updated get satp functions)
 
 --                             -- Free the entire L1 table page after clearing all entries
 --                             Memory.Physical.Free(Interfaces.C.size_t(L1_Phys));
@@ -479,17 +494,18 @@ begin
    ----------------------------------------------------------------
    --  1. Kernel VA → physical → PPN
    ----------------------------------------------------------------
-   Physical_Addr :=
-     Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address)
-                  - Memory.Memory_Offset);
+   --  Physical_Addr :=
+   --    Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address)
+   --                 - Memory.Memory_Offset);
+   Physical_Addr := Unsigned_64 (Map.Root);
 
    New_PPN := U44 (Physical_Addr / 4096);  --  >> 12
 
-<<<<<<< HEAD
    ----------------------------------------------------------------
    --  2. Read current SATP (keeps MODE and ASID intact)
    ----------------------------------------------------------------
-   Satp_Content := Arch.Snippets.Read_SATP;
+   Satp_Content := Extract_Satp_Data (Arch.Snippets.Read_SATP);
+
 
    ----------------------------------------------------------------
    --  3. If PPN already matches, nothing to do
@@ -505,7 +521,7 @@ begin
    New_SATP := Combine_Satp_Data (Satp_Content);
 
    Arch.Snippets.Write_SATP (New_SATP);
-   Arch.Snippets.SFence_VMA_All;   -- flush stale TLB entries
+   --  Arch.Snippets.SFence_VMA_All;   -- flush stale TLB entries
 
    return True;
 
@@ -514,35 +530,6 @@ exception
       return False;
 end Make_Active;
 
-=======
-   --  function Make_Active (Map : Page_Table_Acc) return Boolean is
-   --     Val : Unsigned_64;
-   --  begin
-   --     Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the 
-   --     if Arch.Snippets.Read_SATP /= Val then
-   --        Arch.Snippets.Write_SATP (Val);
-   --     end if;
-   --     return True;
-   --  exception
-   --     when Constraint_Error =>
-   --        return False;
-   --  end Make_Active;
-      function Make_Active (Map : Page_Table_Acc) return Boolean is
-      Val : Unsigned_64;
-   begin
-      -- what should the value of the satp register be, should be the address of the root of the first page table,
-      -- which would be the start of the memory offset?
-      --  Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address) - Memory_Offset); -- get the value of the of the array of 512 bits for the first page table (1..) minus the memory offset
-      Val := Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address));
-      if Arch.Snippets.Read_SATP /= Val then
-         Arch.Snippets.Write_SATP (Val);
-      end if;
-      return True;
-   exception
-      when Constraint_Error =>
-         return False;
-   end Make_Active;
->>>>>>> 5571d86 (updated get satp functions)
 
    procedure Translate_Address
       (Map                : Page_Table_Acc;
