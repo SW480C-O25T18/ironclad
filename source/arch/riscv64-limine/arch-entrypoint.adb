@@ -14,6 +14,7 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+with Arch.Debug;
 with Interfaces; use Interfaces;
 with Devices.UART;
 with Arch.Limine;
@@ -51,26 +52,34 @@ package body Arch.Entrypoint is
 
 
       --  Initialize device discovery facilities.
+      Debug.Print ("Initializing DTB discovery");
       -- if not Arch.DTB.Init then
       --   Lib.Panic.Hard_Panic ("No DTB was found!");
       -- end if;
 
-      
 
 
       --  Initialize the allocators and MMU.
+      Debug.Print ("Initializing allocators and MMU");
       Lib.Messages.Put_Line ("Initializing allocators");
       Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
+      Debug.Print ("Physical allocator initialized");
+      Debug.Print ("Initializing MMU");
       if not Arch.MMU.Init (Info.Memmap (1 .. Info.Memmap_Len)) then
          Lib.Panic.Hard_Panic ("The VMM could not be initialized");
       end if;
+      Debug.Print ("MMU initialized");
 
             Lib.Messages.Put_Line ("allocator initialized");
 
       --  Enable dmesg buffers and KASAN if wanted.
+      Debug.Print ("Enabling logging");
       Lib.Messages.Enable_Logging;
+      Debug.Print ("Logging enabled");
       #if KASAN
+         Debug.Print ("Initializing KASAN");
          Lib.KASAN.Init;
+         Debug.Print ("KASAN initialized");
       #end if;
 
       --  Print the memory map, it is useful at times.
@@ -83,13 +92,17 @@ package body Arch.Entrypoint is
       end loop;
 
       --  Initialize the other cores of the system.
+      Debug.Print ("Initializing cores");
       Arch.CPU.Init_Cores;
+      Debug.Print ("Cores initialized");
 
       --  Go to main kernel.
+      Debug.Print ("Copying command line");
       Arch.Cmdline_Len := Info.Cmdline_Len;
       Arch.Cmdline (1 .. Info.Cmdline_Len) :=
          Info.Cmdline (1 .. Info.Cmdline_Len);
-
+      Debug.Print ("Command line copied");
+      Debug.Print ("Jumping to main kernel");
       Main;
    end Bootstrap_Main;
 end Arch.Entrypoint;

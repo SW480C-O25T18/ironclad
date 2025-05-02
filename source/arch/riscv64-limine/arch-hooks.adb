@@ -14,10 +14,22 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+with Devices.UART;
+with Arch.Debug;
+with Arch.Snippets;
+with Arch.CPU; use Arch.CPU;
+--with Arch.APIC;
+with Arch.Interrupts;
+with Interfaces; use Interfaces;
+with Lib.Messages;
+with Devices.Ramdev;
+with Arch.Limine;
+
 package body Arch.Hooks is
    function Devices_Hook return Boolean is
    begin
-      return True;
+      Debug.Print ("Initializing UART0");
+      return Devices.UART.Init_UART0;
    end Devices_Hook;
 
    function PRCTL_Hook (Code : Natural; Arg : System.Address) return Boolean is
@@ -30,15 +42,26 @@ package body Arch.Hooks is
    procedure Panic_SMP_Hook is
    begin
       null;
+      Lib.Messages.Put_Line ("Panic: System Halted");
    end Panic_SMP_Hook;
 
    function Get_Active_Core_Count return Positive is
    begin
-      return 1;
+      Debug.Print ("Getting active core count");
+      return Core_Count;
    end Get_Active_Core_Count;
 
    procedure Register_RAM_Files is
    begin
-      null;
+   Debug.Print ("Registering RAM files");
+      if not Devices.Ramdev.Init
+         (Limine.Global_Info.RAM_Files (1 .. Limine.Global_Info.RAM_Files_Len), 
+         Debug.Print("RAM files loaded"))
+      then
+         Lib.Messages.Put_Line ("Could not load RAM files");
+      end if;
+   exception
+      when Constraint_Error =>
+         Lib.Messages.Put_Line ("Errored while loading RAM files");
    end Register_RAM_Files;
 end Arch.Hooks;

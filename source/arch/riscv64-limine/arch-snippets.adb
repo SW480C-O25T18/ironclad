@@ -15,56 +15,73 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with System.Machine_Code; use System.Machine_Code;
+with Arch.Debug;
 
 package body Arch.Snippets is
    procedure HCF is
    begin
       loop
+         Debug.Print ("HCF: Halt and Catch Fire");
+         Debug.Print ("HCF: Disabling interrupts");
          Disable_Interrupts;
+         Debug.Print ("HCF: Waiting for interrupt");
          Wait_For_Interrupt;
       end loop;
    end HCF;
 
    procedure Enable_Interrupts is
    begin
+      Debug.Print ("Enable_Interrupts: Enabling interrupts");
       Write_SStatus (Read_SStatus or 2#10#);
+      Debug.Print ("Enable_Interrupts: Interrupts enabled");
    end Enable_Interrupts;
 
    procedure Disable_Interrupts is
    begin
+      Debug.Print ("Disable_Interrupts: Disabling interrupts");
       Write_SStatus (Read_SStatus and not 2#10#);
+      Debug.Print ("Disable_Interrupts: Interrupts disabled");
    end Disable_Interrupts;
 
    procedure Wait_For_Interrupt is
    begin
+      Debug.Print ("Wait_For_Interrupt: Waiting for interrupt");
       Asm ("wfi", Volatile => True);
+      Debug.Print ("Wait_For_Interrupt: Interrupt received");
    end Wait_For_Interrupt;
 
    function Interrupts_Enabled return Boolean is
    begin
+      Debug.Print ("Interrupts_Enabled: Checking if interrupts are enabled");
       return False;
    end Interrupts_Enabled;
 
    procedure Pause is
    begin
+      Debug.Print ("Pause: No pause equivalent sadly, inneficient busy loops for you!");
       null; --  No pause equivalent sadly, inneficient busy loops for you!
    end Pause;
 
    function Read_SStatus return Unsigned_64 is
       Value : Unsigned_64;
    begin
+      Debug.Print ("Read_SStatus: Reading SStatus");
       Asm ("csrr %0, sstatus",
            Outputs  => Unsigned_64'Asm_Output ("=r", Value),
            Clobber  => "memory",
            Volatile => True);
+      Debug.Print ("Read_SStatus: SStatus = ", To_String(Value));
+      Debug.Print ("Read_SStatus: SStatus read");
       return Value;
    end Read_SStatus;
 
    procedure Write_SStatus (Value : Unsigned_64) is
    begin
+      Debug.Print ("Write_SStatus: Writing SStatus = ", To_String(Value));
       Asm ("csrw sstatus, %0",
            Inputs   => Unsigned_64'Asm_Input ("r", Value),
            Clobber  => "memory",
            Volatile => True);
+      Debug.Print ("Write_SStatus: SStatus written");
    end Write_SStatus;
 end Arch.Snippets;
