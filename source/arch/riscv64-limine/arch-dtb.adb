@@ -27,7 +27,7 @@ with System.Storage_Elements; use System.Storage_Elements;
 with Ada.Unchecked_Conversion;
 with Arch.Limine;
 with Arch.Debug;
-with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Text_IO; use Ada.Text_IO;
 
 package body Arch.DTB with SPARK_Mode => Off is
 

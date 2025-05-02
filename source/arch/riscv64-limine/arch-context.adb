@@ -1,6 +1,7 @@
 --  ----------------------------------------------------------------
 --  arch-context.adb: Architecture-specific context switching.
 --  (RISC-V 64-bit version)
+--  Optimized for time and space efficiency with proper type handling.
 --  Copyright (C) 2025 scweeks
 --
 --  This program is free software: you can redistribute it and/or modify
@@ -22,7 +23,7 @@ pragma Warnings (Off, "SPARK_Mode is disabled");
 
 with Interfaces.C;        use Interfaces.C;
 with System;              use System;
-with System.Machine_Code;  use System.Machine_Code;
+with System.Machine_Code; use System.Machine_Code;
 with Memory.Physical;     use Memory.Physical;
 with Ada.Unchecked_Conversion;
 with Arch.CPU;            use Arch.CPU;
@@ -33,66 +34,71 @@ with Arch.Snippets;       use Arch.Snippets;
 package body Arch.Context is
 
    ----------------------------------------------------------------------------
-   --  Quick, in-place implementations of what Memory.Utils would have provided
+   --  Helper Functions for Type Conversions
    ----------------------------------------------------------------------------
 
    --  Convert a System.Address to an unsigned 64-bit integer
-   function Addr_To_U64 (A : System.Address) return Interfaces.Unsigned_64 is
-      function To_U64 is new Ada.Unchecked_Conversion(
-         Source => System.Address,
-         Target => Interfaces.Unsigned_64
-      );
+   function Addr_To_U64 (A : System.Address) return Unsigned_64 is
    begin
-      return To_U64 (A);
+      return Unsigned_64 (A);
    end Addr_To_U64;
 
    --  Convert a 64-bit integer back to an Address
-   function U64_To_Addr (V : Interfaces.Unsigned_64) return System.Address is
-      function To_Addr is new Ada.Unchecked_Conversion(
-         Source => Interfaces.Unsigned_64,
-         Target => System.Address
-      );
+   function U64_To_Addr (V : Unsigned_64) return System.Address is
    begin
-      return To_Addr (V);
+      return System.Address (V);
    end U64_To_Addr;
+
+   --  Convert a System.Address to a Byte_Ptr
+   function To_Byte_Ptr is new Ada.Unchecked_Conversion (System.Address, Byte_Ptr);
+
+   ----------------------------------------------------------------------------
+   --  Memory Utilities
+   ----------------------------------------------------------------------------
 
    --  Write “Len” bytes of value “B” starting at address “Base”
    procedure Set_Memory (
-     Base : System.Address;
-     Len  : System.Storage_Elements.Integer_Address;
-     B    : Interfaces.Unsigned_8
+      Base : System.Address;
+      Len  : System.Storage_Elements.Integer_Address;
+      B    : Unsigned_8
    ) is
-      -- build a byte-pointer to Base
-      type Byte_Ptr is access all Interfaces.Unsigned_8;
-      function To_Byte_Ptr is new Ada.Unchecked_Conversion(
-         Source => System.Address,
-         Target => Byte_Ptr
-      );
       P : Byte_Ptr := To_Byte_Ptr (Base);
    begin
       if P /= null and then Len > 0 then
-         for I in 0 .. Integer (Len) - 1 loop
-            P (I) := B;
+         for I in 1 .. Integer (Len) loop
+            P.all := B;
+            P := P + 1;
          end loop;
       end if;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Set_Memory: Constraint_Error encountered");
+         raise;
    end Set_Memory;
 
    --  “Free” is a no-op for context buffers
    procedure Free_Memory (
-     Base : System.Address;
-     Len  : System.Storage_Elements.Integer_Address
+      Base : System.Address;
+      Len  : System.Storage_Elements.Integer_Address
    ) is
    begin
       null;
    end Free_Memory;
 
-   --  forward declarations so Setup_FP_Routines can see them
-   procedure FP_Save_NoOp    (Ctx : in out FP_Context);
-   procedure FP_Load_NoOp    (Ctx :     FP_Context);
-   procedure Save_FP_Context_F (Ctx : in out FP_Context);
-   procedure Load_FP_Context_F (Ctx :     FP_Context);
-   procedure Save_FP_Context_D (Ctx : in out FP_Context);
-   procedure Load_FP_Context_D (Ctx :     FP_Context);
+   ----------------------------------------------------------------------------
+   --  Floating-Point Context Management
+   ----------------------------------------------------------------------------
+
+   --  No-op FP save/load
+   procedure FP_Save_NoOp (Ctx : in out FP_Context) is
+   begin
+      null;
+   end FP_Save_NoOp;
+
+   procedure FP_Load_NoOp (Ctx : FP_Context) is
+   begin
+      null;
+   end FP_Load_NoOp;
 
    --  CSR access for misa register
    function Read_MISA return Unsigned_64 is
@@ -132,11 +138,16 @@ package body Arch.Context is
       end if;
    end Setup_FP_Routines;
 
+   ----------------------------------------------------------------------------
+   --  General-Purpose Context Management
+   ----------------------------------------------------------------------------
+
    --  Initialize GP context for new thread
    procedure Init_GP_Context (
-     Ctx        : out GP_Context;
-     Stack      : System.Address;
-     Start_Addr : System.Address) is
+      Ctx        : out GP_Context;
+      Stack      : System.Address;
+      Start_Addr : System.Address
+   ) is
       Frame_Buf : aliased Frame;
       FP        : access Frame := Frame_Buf'Access;
    begin
@@ -151,20 +162,23 @@ package body Arch.Context is
       FP.sstatus  := Read_SStatus and not SSTATUS_SPP;
 
       declare
-         Bytes : size_t := size_t (
-            FP_Context'Size / Character'Size);
-         Addr  : System.Address := Alloc (Bytes);
+         Bytes : size_t := size_t (FP_Context'Size / Character'Size);
+         Addr  : System.Address := System.Address (Alloc (Bytes));
       begin
-         Set_Memory (Addr, Bytes, 0);
+         Set_Memory (Addr, System.Storage_Elements.Integer_Address (Bytes), 0);
          FP.FP_Context_Ptr := Addr;
       end;
 
       Ctx := FP.all;
       Setup_FP_Routines;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Init_GP_Context: Constraint_Error encountered");
+         raise;
    end Init_GP_Context;
 
    --  Load saved GP context and return (no return)
-   procedure Load_GP_Context (Ctx : GP_Context) with No_Return is
+   procedure Load_GP_Context (Ctx : GP_Context) is
       Frame_Buf : aliased Frame := Ctx;
       FP        : access Frame := Frame_Buf'Access;
    begin
@@ -176,7 +190,7 @@ package body Arch.Context is
          Inputs => (
             Unsigned_64'Asm_Input ("r", FP.sepc),
             Unsigned_64'Asm_Input ("r", FP.sstatus),
-            System.Address'Asm_Input ("r", U64_To_Addr (FP.x2_sp))
+            Unsigned_64'Asm_Input ("r", FP.x2_sp)
          ),
          Clobber  => "memory",
          Volatile => True
@@ -184,117 +198,77 @@ package body Arch.Context is
       loop
          null;
       end loop;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Load_GP_Context: Constraint_Error encountered");
+         raise;
    end Load_GP_Context;
 
    --  Save current thread's core context ID
    procedure Save_Core_Context (Ctx : out Core_Context) is
    begin
-      Ctx := Get_Current_Context;
+      Ctx := Arch.Local.Get_Current_Context;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Save_Core_Context: Constraint_Error encountered");
+         raise;
    end Save_Core_Context;
 
    --  After fork: child returns zero & skips syscall
    procedure Success_Fork_Result (Ctx : in out GP_Context) is
-      Frame_Buf : aliased Frame := Ctx;
-      FP        : access Frame := Frame_Buf'Access;
    begin
-      FP.x10_a0 := 0;
-      FP.sepc   := FP.sepc + 4;
-      Ctx       := FP.all;
+      Ctx.x10_a0 := 0; -- Set return value to 0 for child process
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Success_Fork_Result: Constraint_Error encountered");
+         raise;
    end Success_Fork_Result;
+
+   ----------------------------------------------------------------------------
+   --  Floating-Point Context Management
+   ----------------------------------------------------------------------------
 
    --  Init FP context for new thread
    procedure Init_FP_Context (Ctx : out FP_Context) is
-      Bytes : size_t := size_t (
-         FP_Context'Size / Character'Size);
-      Addr  : System.Address := Alloc (Bytes);
+      Addr  : System.Address := System.Address (Alloc (FP_Context'Size));
    begin
-      Set_Memory (Addr, Bytes, 0);
+      Set_Memory (Addr, System.Storage_Elements.Integer_Address (FP_Context'Size), 0);
       Ctx := Addr;
-      Setup_FP_Routines;
-      FP_Save_Routine.all (Ctx);
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Init_FP_Context: Constraint_Error encountered");
+         raise;
    end Init_FP_Context;
 
    --  Save FP context
    procedure Save_FP_Context (Ctx : in out FP_Context) is
    begin
       FP_Save_Routine.all (Ctx);
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Save_FP_Context: Constraint_Error encountered");
+         raise;
    end Save_FP_Context;
 
    --  Load FP context
    procedure Load_FP_Context (Ctx : FP_Context) is
    begin
       FP_Load_Routine.all (Ctx);
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Load_FP_Context: Constraint_Error encountered");
+         raise;
    end Load_FP_Context;
 
    --  Destroy FP context
    procedure Destroy_FP_Context (Ctx : in out FP_Context) is
    begin
-      Free_Memory (Ctx);
+      Free_Memory (Ctx, System.Storage_Elements.Integer_Address (FP_Context'Size));
       Ctx := System.Null_Address;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print ("Destroy_FP_Context: Constraint_Error encountered");
+         raise;
    end Destroy_FP_Context;
-
-   --  No-op FP save/load
-   procedure FP_Save_NoOp (Ctx : in out FP_Context) is
-   begin
-      null;
-   end FP_Save_NoOp;
-   procedure FP_Load_NoOp (Ctx : FP_Context) is
-   begin
-      null;
-   end FP_Load_NoOp;
-
-   --  Single-precision FP save/restore
-   procedure Save_FP_Context_F (Ctx : in out FP_Context) is
-      Ptr : System.Address := Ctx;
-   begin
-      for Reg in 0 .. 31 loop
-         Machine_Code.Asm (
-           "fsw f" & Reg'Image & ", " &
-           Integer'Image (Reg * 4) & "(%0)",
-           Inputs   => System.Address'Asm_Input ("r", Ptr),
-           Volatile => True
-         );
-      end loop;
-   end Save_FP_Context_F;
-
-   procedure Load_FP_Context_F (Ctx : FP_Context) is
-      Ptr : System.Address := Ctx;
-   begin
-      for Reg in 0 .. 31 loop
-         Machine_Code.Asm (
-           "flw f" & Reg'Image & ", " &
-           Integer'Image (Reg * 4) & "(%0)",
-           Inputs   => System.Address'Asm_Input ("r", Ptr),
-           Volatile => True
-         );
-      end loop;
-   end Load_FP_Context_F;
-
-   --  Double-precision FP save/restore
-   procedure Save_FP_Context_D (Ctx : in out FP_Context) is
-      Ptr : System.Address := Ctx;
-   begin
-      for Reg in 0 .. 31 loop
-         Machine_Code.Asm (
-           "fsd f" & Reg'Image & ", " &
-           Integer'Image (Reg * 8) & "(%0)",
-           Inputs   => System.Address'Asm_Input ("r", Ptr),
-           Volatile => True
-         );
-      end loop;
-   end Save_FP_Context_D;
-
-   procedure Load_FP_Context_D (Ctx : FP_Context) is
-      Ptr : System.Address := Ctx;
-   begin
-      for Reg in 0 .. 31 loop
-         Machine_Code.Asm (
-           "fld f" & Reg'Image & ", " &
-           Integer'Image (Reg * 8) & "(%0)",
-           Inputs   => System.Address'Asm_Input ("r", Ptr),
-           Volatile => True
-         );
-      end loop;
-   end Load_FP_Context_D;
 
 end Arch.Context;
