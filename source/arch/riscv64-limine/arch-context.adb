@@ -40,17 +40,29 @@ package body Arch.Context is
    --  Helper Functions for Type Conversions
    ----------------------------------------------------------------------------
 
+   --  Convert a FP_Context to a System.Address
+   function FP_Context_To_Addr is new
+      Ada.Unchecked_Conversion (
+         Source => FP_Context,
+         Target => System.Address);
+
+   --  Convert a System.Address to a FP_Context
+   function Addr_To_FP_Context is new
+      Ada.Unchecked_Conversion (
+         Source => System.Address,
+         Target => FP_Context);
+
    --  Convert a System.Address to an unsigned 64-bit integer
-   function Addr_To_U64 (A : System.Address) return Unsigned_64 is
-   begin
-      return Unsigned_64 (A);
-   end Addr_To_U64;
+   function Addr_To_U64 is new
+      Ada.Unchecked_Conversion (
+         Source => System.Address,
+         Target => Unsigned_64);
 
    --  Convert a 64-bit integer back to an Address
-   function U64_To_Addr (V : Unsigned_64) return System.Address is
-   begin
-      return System.Address (V);
-   end U64_To_Addr;
+   function U64_To_Addr is new
+      Ada.Unchecked_Conversion (
+         Source => Unsigned_64,
+         Target => System.Address);
 
    --  Convert a System.Address to a Byte_Ptr
    function To_Byte_Ptr is new Ada.Unchecked_Conversion (System.Address, Byte_Ptr);
@@ -74,9 +86,9 @@ package body Arch.Context is
          end loop;
       end if;
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Set_Memory: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Set_Memory: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Set_Memory: others encountered");
+         Lib.Panic.Hard_Panic ("Set_Memory: others");
    end Set_Memory;
 
    --  “Free” is a no-op for context buffers
@@ -163,7 +175,7 @@ package body Arch.Context is
          Clobber => "memory",
          Volatile => True);
    end Load_FP_Context_F;
-   
+
    --  FP save/load dispatch types
    type FP_Save_Routine_Type is access procedure (Ctx : in out FP_Context);
    type FP_Load_Routine_Type is access procedure (Ctx : FP_Context);
@@ -239,9 +251,9 @@ package body Arch.Context is
       Ctx := FP.all;
       Setup_FP_Routines;
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Init_GP_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Init_GP_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Init_GP_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Init_GP_Context: others");
    end Init_GP_Context;
 
    --  Load saved GP context and return (no return)
@@ -266,9 +278,9 @@ package body Arch.Context is
          null;
       end loop;
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Load_GP_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Load_GP_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Load_GP_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Load_GP_Context: others");
    end Load_GP_Context;
 
    --  Save current thread's core context ID
@@ -276,9 +288,9 @@ package body Arch.Context is
    begin
       Ctx := Arch.Local.Get_Current_Context;
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Save_Core_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Save_Core_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Save_Core_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Save_Core_Context: others");
    end Save_Core_Context;
 
    --  After fork: child returns zero & skips syscall
@@ -286,9 +298,9 @@ package body Arch.Context is
    begin
       Ctx.x10_a0 := 0; -- Set return value to 0 for child process
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Success_Fork_Result: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Success_Fork_Result: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Success_Fork_Result: others encountered");
+         Lib.Panic.Hard_Panic ("Success_Fork_Result: others");
    end Success_Fork_Result;
 
    ----------------------------------------------------------------------------
@@ -301,11 +313,11 @@ package body Arch.Context is
    begin
       Set_Memory (Addr,
          System.Storage_Elements.Integer_Address (FP_Context'Size), 0);
-      Ctx := Addr;
+      Ctx := Addr_To_FP_Context (Addr);
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Init_FP_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Init_FP_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Init_FP_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Init_FP_Context: others");
    end Init_FP_Context;
 
    --  Save FP context
@@ -313,9 +325,9 @@ package body Arch.Context is
    begin
       FP_Save_Routine.all (Ctx);
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Save_FP_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Save_FP_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Save_FP_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Save_FP_Context: others");
    end Save_FP_Context;
 
    --  Load FP context
@@ -323,23 +335,23 @@ package body Arch.Context is
    begin
       FP_Load_Routine.all (Ctx);
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Load_FP_Context: Constraint_Error encountered");
-         Lib.Panic.Hard_Panic ("Load_FP_Context: Constraint_Error");
+      when others =>
+         Arch.Debug.Print ("Load_FP_Context: others encountered");
+         Lib.Panic.Hard_Panic ("Load_FP_Context: others");
    end Load_FP_Context;
 
    --  Destroy FP context
    procedure Destroy_FP_Context (Ctx : in out FP_Context) is
    begin
       Free_Memory (
-         U64_To_Addr (Unsigned_64 (Ctx)),
+         Ctx,
          System.Storage_Elements.Integer_Address (FP_Context'Size)
       );
-      Ctx := System.Null_Address;
+      Ctx := FAddr_To_FP_Context (System.Null_Address);
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Destroy_FP_Context: Constraint_Error encountered");
-         Ctx := System.Null_Address; -- Ensure Ctx is nullified to avoid further issues
+      when others =>
+         Arch.Debug.Print ("Destroy_FP_Context: others encountered");
+         Ctx := Addr_To_FP_Context (System.Null_Address); -- Ensure Ctx is nullified to avoid further issues
    end Destroy_FP_Context;
 
 end Arch.Context;

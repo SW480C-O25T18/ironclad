@@ -55,7 +55,7 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    TCB_CONTEXT_OFFSET : constant Natural := 72;  -- Adjust as necessary
    function Get_TCP_OFFSET return Unsigned_64 is
-      (To_Address(TCB_CONTEXT_OFFSET));
+      (To_Address (TCB_CONTEXT_OFFSET));
 
    ------------------------------------------------------------------------------
    -- Get_Current_Context
@@ -74,10 +74,12 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    begin
       declare
          type Core_Context_Ptr is access all Unsigned_64;
-         CP : Core_Context_Ptr := Core_Context_Ptr(TCB + To_Address(TCB_CONTEXT_OFFSET));
+         CP : Core_Context_Ptr :=
+            Core_Context_Ptr (TCB + To_Address (TCB_CONTEXT_OFFSET));
       begin
          if CP = null then
-            Arch.Debug.Print("Get_Current_Context: TCB returned a null context; defaulting to 0");
+            Arch.Debug.Print (
+               "Get_Current_Context: TCB returned a null context; defaulting to 0");
             return 0;
          else
             return CP.all;
@@ -90,7 +92,9 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    --
    -- Provides conversion routines for accessing floating-point context.
    ------------------------------------------------------------------------------
-   package FP_Conv is new System.Address_To_Access_Conversions (Arch.Context.FP_Context);
+   package FP_Conv is 
+      new System.Address_To_Access_Conversions (
+      Arch.Context.FP_Context);
 
    ------------------------------------------------------------------------------
    -- IRQ Table and IRQ_Counts
@@ -143,24 +147,31 @@ package body Arch.Interrupts with SPARK_Mode => Off is
          if Has_CLINT then
             Arch.CLINT.Set_CLINT_Configuration;
             for Hart_ID in 0 .. Num_Harts - 1 loop
-               Arch.CLINT.Initialize_Hart(Hart_ID);
-               Arch.Debug.Print("CLINT initialized for hart " & Unsigned_64'Image(Hart_ID));
+               Arch.CLINT.Initialize_Hart (Hart_ID);
+               Arch.Debug.Print (
+                  "CLINT initialized for hart "
+                  & Unsigned_64'Image (Hart_ID));
             end loop;
          end if;
 
          if Has_PLIC then
             Arch.PLIC.Set_PLIC_Configuration;
             for Hart_ID in 0 .. Num_Harts - 1 loop
-               Arch.PLIC.Initialize(Hart_ID, Get_Current_Context);
-               Arch.Debug.Print("PLIC initialized for hart " & Unsigned_64'Image(Hart_ID));
+               Arch.PLIC.Initialize (Hart_ID, Get_Current_Context);
+               Arch.Debug.Print (
+                  "PLIC initialized for hart "
+                  & Unsigned_64'Image (Hart_ID));
             end loop;
-            Arch.Debug.Print("PLIC detected and enabled.");
+            Arch.Debug.Print ("PLIC detected and enabled.");
          end if;
-         Arch.Debug.Print("Arch.Interrupts: Initialize completed successfully.");
+         Arch.Debug.Print (
+            "Arch.Interrupts: Initialize completed successfully.");
       else
-         Arch.Debug.Print("Arch.Interrupts: No interrupts detected, interrupt handling disabled.");
+         Arch.Debug.Print (
+            "Arch.Interrupts: No interrupts detected, interrupt handling disabled.");
       end if;
-      Arch.Debug.Print("Arch.Interrupts: Interrupt handling initialized successfully.");
+      Arch.Debug.Print (
+         "Arch.Interrupts: Interrupt handling initialized successfully.");
    end Initialize;
 
    ------------------------------------------------------------------------------
@@ -177,13 +188,17 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    procedure Register_IRQ (IRQ : Integer; Handler : IRQ_Handler) is
    begin
-      Arch.Debug.Print("Register_IRQ: Registering IRQ " & Integer'Image(IRQ) &
-                         " with handler at " & Unsigned_64'Image(Unsigned_64(Handler)));
+      Arch.Debug.Print (
+         "Register_IRQ: Registering IRQ " & Integer'Image (IRQ) &
+                         " with handler at " & Unsigned_64'Image (
+                           Unsigned_64 (Handler)));
       if IRQ in IRQ_Table'Range then
-         IRQ_Table(IRQ) := Handler;
-         Arch.Debug.Print("IRQ " & Integer'Image(IRQ) & " registered successfully.");
+         IRQ_Table (IRQ) := Handler;
+         Arch.Debug.Print (
+            "IRQ " & Integer'Image (IRQ) & " registered successfully.");
       else
-         Arch.Debug.Print("Register_IRQ: Invalid IRQ index " & Integer'Image(IRQ));
+         Arch.Debug.Print (
+            "Register_IRQ: Invalid IRQ index " & Integer'Image (IRQ));
          raise Constraint_Error with "Register_IRQ: Invalid IRQ index";
       end if;
    end Register_IRQ;
@@ -201,12 +216,15 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    procedure Unregister_IRQ (IRQ : Integer) is
    begin
-      Arch.Debug.Print("Unregister_IRQ: Unregistering IRQ " & Integer'Image(IRQ));
+      Arch.Debug.Print (
+         "Unregister_IRQ: Unregistering IRQ " & Integer'Image (IRQ));
       if IRQ in IRQ_Table'Range then
-         IRQ_Table(IRQ) := null;
-         Arch.Debug.Print("IRQ " & Integer'Image(IRQ) & " unregistered successfully.");
+         IRQ_Table (IRQ) := null;
+         Arch.Debug.Print (
+            "IRQ " & Integer'Image (IRQ) & " unregistered successfully.");
       else
-         Arch.Debug.Print("Unregister_IRQ: Invalid IRQ index " & Integer'Image(IRQ));
+         Arch.Debug.Print (
+            "Unregister_IRQ: Invalid IRQ index " & Integer'Image (IRQ));
          raise Constraint_Error with "Unregister_IRQ: Invalid IRQ index";
       end if;
    end Unregister_IRQ;
@@ -224,33 +242,50 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    -- the handler accordingly. If no valid IRQ is found, a debug message is printed.
    -- Exceptions are caught and result in a hard panic.
    ------------------------------------------------------------------------------
-   procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node; Handler : IRQ_Handler) is
-      IRQ : constant Integer := Arch.DTB.Get_IRQ(Node);
+   procedure Register_Device_IRQ (
+      Node : access Arch.DTB.DTB_Node;
+      Handler : IRQ_Handler) is
+      IRQ : constant Integer := Arch.DTB.Get_IRQ (Node);
    begin
-      Arch.Debug.Print("Register_Device_IRQ: Registering IRQ " & Integer'Image(IRQ) &
-                         " for device " & To_String(Node.Name));
+      Arch.Debug.Print (
+         "Register_Device_IRQ: Registering IRQ " & Integer'Image (IRQ) &
+                         " for device " & To_String (Node.Name));
       if IRQ /= -1 then
-         Register_IRQ(IRQ, Handler);
-         Arch.Debug.Print("Device IRQ " & Integer'Image(IRQ) & " registered for " & To_String(Node.Name));
+         Register_IRQ (IRQ, Handler);
+         Arch.Debug.Print (
+            "Device IRQ " & Integer'Image (IRQ)
+            & " registered for " & To_String (Node.Name));
       else
-         Arch.Debug.Print("Register_Device_IRQ: No valid IRQ found for device " & To_String(Node.Name));
+         Arch.Debug.Print (
+            "Register_Device_IRQ: No valid IRQ found for device "
+            & To_String (Node.Name));
       end if;
    exception
       when Constraint_Error =>
-         Arch.Debug.Print("Register_Device_IRQ: Constraint error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Constraint error: " & Node.Name);
+         Arch.Debug.Print (
+            "Register_Device_IRQ: Constraint error while registering device IRQ.");
+         Lib.Panic.Hard_Panic (
+            "Register_Device_IRQ: Constraint error: " & Node.Name);
       when Program_Error =>
-         Arch.Debug.Print("Register_Device_IRQ: Program error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Program error: " & Node.Name);
+         Arch.Debug.Print (
+            "Register_Device_IRQ: Program error while registering device IRQ.");
+         Lib.Panic.Hard_Panic (
+            "Register_Device_IRQ: Program error: " & Node.Name);
       when Storage_Error =>
-         Arch.Debug.Print("Register_Device_IRQ: Storage error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Storage error: " & Node.Name);
+         Arch.Debug.Print (
+            "Register_Device_IRQ: Storage error while registering device IRQ.");
+         Lib.Panic.Hard_Panic (
+            "Register_Device_IRQ: Storage error: " & Node.Name);
       when Tasking_Error =>
-         Arch.Debug.Print("Register_Device_IRQ: Tasking error while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Tasking error: " & Node.Name);
+         Arch.Debug.Print (
+            "Register_Device_IRQ: Tasking error while registering device IRQ.");
+         Lib.Panic.Hard_Panic (
+            "Register_Device_IRQ: Tasking error: " & Node.Name);
       when others =>
-         Arch.Debug.Print("Register_Device_IRQ: Unhandled exception while registering device IRQ.");
-         Lib.Panic.Hard_Panic("Register_Device_IRQ: Unhandled exception: " & Node.Name);
+         Arch.Debug.Print (
+            "Register_Device_IRQ: Unhandled exception while registering device IRQ.");
+         Lib.Panic.Hard_Panic (
+            "Register_Device_IRQ: Unhandled exception: " & Node.Name);
    end Register_Device_IRQ;
 
    ------------------------------------------------------------------------------
@@ -277,71 +312,96 @@ package body Arch.Interrupts with SPARK_Mode => Off is
       Cause : constant Unsigned_64 := Frame_Ptr.scause;
       Hart  : constant Unsigned_64 := Get_Current_Hart_ID;
    begin
-      Arch.Debug.Print("Handle_Interrupt: hart=" & Unsigned_64'Image(Hart) &
-                         " scause=" & Unsigned_64'Image(Cause) &
-                         " sepc=" & Unsigned_64'Image(Frame_Ptr.sepc) &
-                         " sp=" & Unsigned_64'Image(Frame_Ptr.sp) &
-                         " sstatus=" & Unsigned_64'Image(Frame_Ptr.sstatus) &
-                         " sscratch=" & Unsigned_64'Image(Frame_Ptr.sscratch));
-      Arch.Debug.Print("Handle_Interrupt: Starting interrupt handler");
+      Arch.Debug.Print ("Handle_Interrupt: hart=" & Unsigned_64'Image (Hart) &
+                         " scause=" & Unsigned_64'Image (Cause) &
+                         " sepc=" & Unsigned_64'Image (Frame_Ptr.sepc) &
+                         " sp=" & Unsigned_64'Image (Frame_Ptr.sp) &
+                         " sstatus=" & Unsigned_64'Image (Frame_Ptr.sstatus) &
+                         " sscratch=" & Unsigned_64'Image (Frame_Ptr.sscratch));
+      Arch.Debug.Print ("Handle_Interrupt: Starting interrupt handler");
 
       -- Process CLINT interrupts (software and timer)
-      if Has_CLINT and (Cause = CLINT_SW_INT_CODE or Cause = CLINT_TIMER_INT_CODE1 or Cause = CLINT_TIMER_INT_CODE2) then
+      if Has_CLINT and (
+         Cause = CLINT_SW_INT_CODE
+            or Cause = CLINT_TIMER_INT_CODE1
+            or Cause = CLINT_TIMER_INT_CODE2) then
          case Cause is
             when CLINT_SW_INT_CODE =>
-               Arch.Debug.Print("Handle_Interrupt: CLINT software interrupt detected");
-               Arch.CLINT.Clear_Software_Interrupt(Hart);
-               Scheduler.Scheduler_ISR(Frame_Ptr);
+               Arch.Debug.Print (
+                  "Handle_Interrupt: CLINT software interrupt detected");
+               Arch.CLINT.Clear_Software_Interrupt (Hart);
+               Scheduler.Scheduler_ISR (Frame_Ptr);
             when CLINT_TIMER_INT_CODE1 | CLINT_TIMER_INT_CODE2 =>
-               Arch.Debug.Print("Handle_Interrupt: CLINT timer interrupt detected");
-               Arch.CLINT.Clear_Timer_Interrupt(Hart);
-               Scheduler.Scheduler_ISR(Frame_Ptr);
+               Arch.Debug.Print (
+                  "Handle_Interrupt: CLINT timer interrupt detected");
+               Arch.CLINT.Clear_Timer_Interrupt (Hart);
+               Scheduler.Scheduler_ISR (Frame_Ptr);
             when others =>
-               Arch.Debug.Print("Handle_Interrupt: Unhandled CLINT interrupt code: " & Unsigned_64'Image(Cause));
-               Lib.Panic.Hard_Panic("Unhandled CLINT IRQ", Frame_Ptr);
+               Arch.Debug.Print (
+                  "Handle_Interrupt: Unhandled CLINT interrupt code: "
+                  & Unsigned_64'Image (Cause));
+               Lib.Panic.Hard_Panic ("Unhandled CLINT IRQ", Frame_Ptr);
          end case;
       end if;
             
       -- Process PLIC external interrupts if enabled
-      if Has_PLIC and (Cause = PLIC_EXT_INT_CODE1 or Cause = PLIC_EXT_INT_CODE2) then
+      if Has_PLIC and (
+         Cause = PLIC_EXT_INT_CODE1
+         or Cause = PLIC_EXT_INT_CODE2) then
          case Cause is
             when PLIC_EXT_INT_CODE1 | PLIC_EXT_INT_CODE2 =>
-               Arch.Debug.Print("Handle_Interrupt: External interrupt (PLIC) detected");
+               Arch.Debug.Print (
+                  "Handle_Interrupt: External interrupt (PLIC) detected");
                declare
-                  IRQ : Integer := Integer(Arch.PLIC.Claim(Hart, Get_Current_Context));
+                  IRQ : Integer := Integer (
+                     Arch.PLIC.Claim (Hart, Get_Current_Context));
                begin
-                  Arch.Debug.Print("Handle_Interrupt: Claimed IRQ " & Integer'Image(IRQ));
+                  Arch.Debug.Print (
+                     "Handle_Interrupt: Claimed IRQ " & Integer'Image (IRQ));
                   if IRQ in IRQ_Table'Range then
-                     IRQ_Counts(IRQ) := IRQ_Counts(IRQ) + 1;
-                     if IRQ_Table(IRQ) /= null then
-                        Arch.Debug.Print("Handle_Interrupt: Dispatching IRQ " & Integer'Image(IRQ));
-                        if IRQ_Table(IRQ) /= null then
-                           IRQ_Table(IRQ).Invokes.all;
+                     IRQ_Counts (IRQ) := IRQ_Counts (IRQ) + 1;
+                     if IRQ_Table (IRQ) /= null then
+                        Arch.Debug.Print (
+                           "Handle_Interrupt: Dispatching IRQ "
+                           & Integer'Image (IRQ));
+                        if IRQ_Table (IRQ) /= null then
+                           IRQ_Table (IRQ).Invokes.all;
                         else
-                           Arch.Debug.Print("Handle_Interrupt: No handler registered for IRQ " & Integer'Image(IRQ));
+                           Arch.Debug.Print (
+                              "Handle_Interrupt: No handler registered for IRQ "
+                              & Integer'Image (IRQ));
                         end if;
-                        Arch.Debug.Print("Handle_Interrupt: IRQ " & Integer'Image(IRQ) & " handler executed");
+                        Arch.Debug.Print (
+                           "Handle_Interrupt: IRQ "
+                           & Integer'Image (IRQ) & " handler executed");
                      else
-                        Arch.Debug.Print("Handle_Interrupt: No handler registered for IRQ " & Integer'Image(IRQ));
+                        Arch.Debug.Print (
+                           "Handle_Interrupt: No handler registered for IRQ "
+                           & Integer'Image (IRQ));
                      end if;
                   end if;
-                  Arch.PLIC.Complete(Hart, Get_Current_Context, Unsigned_64(IRQ));
-                  Arch.Debug.Print("Handle_Interrupt: IRQ " & Integer'Image(IRQ) & " completed");
+                  Arch.PLIC.Complete (
+                     Hart, Get_Current_Context, Unsigned_64 (IRQ));
+                  Arch.Debug.Print (
+                     "Handle_Interrupt: IRQ "
+                     & Integer'Image (IRQ) & " completed");
                end;
          end case;
       end if;
 
       -- Process syscall interrupts
       if Cause = SYSCALL_INT_CODE then
-         Arch.Debug.Print("Handle_Interrupt: Syscall interrupt detected, invoking Syscall_Handler");
-         Syscall_Handler(Frame_Ptr);
+         Arch.Debug.Print (
+            "Handle_Interrupt: Syscall interrupt detected, invoking Syscall_Handler");
+         Syscall_Handler (Frame_Ptr);
       elsif Cause /= CLINT_SW_INT_CODE and Cause /= CLINT_TIMER_INT_CODE1 and 
             Cause /= CLINT_TIMER_INT_CODE2 and Cause /= PLIC_EXT_INT_CODE1 and 
             Cause /= PLIC_EXT_INT_CODE2 then
-         Arch.Debug.Print("Handle_Interrupt: Unhandled scause=" & Unsigned_64'Image(Cause));
-         Lib.Panic.Hard_Panic("Unhandled IRQ", Frame_Ptr);
+         Arch.Debug.Print (
+            "Handle_Interrupt: Unhandled scause=" & Unsigned_64'Image (Cause));
+         Lib.Panic.Hard_Panic ("Unhandled IRQ", Frame_Ptr);
       end if;
-      Arch.Debug.Print("Handle_Interrupt: Interrupt completed successfully");
+      Arch.Debug.Print ("Handle_Interrupt: Interrupt completed successfully");
    end Handle_Interrupt;
 
    ------------------------------------------------------------------------------
@@ -368,61 +428,64 @@ package body Arch.Interrupts with SPARK_Mode => Off is
       Hart_ID    : constant Unsigned_64 := Arch.Local.Get_Hart_ID;
       Is_Syscall : constant Boolean := (Cause_Code = SYSCALL_INT_CODE);
    begin
-      Arch.Debug.Print("Handle_Trap: hart=" & Unsigned_64'Image(Hart_ID) &
-                         " scause=" & Unsigned_64'Image(Frame_Ptr.scause) &
-                         " sepc=" & Unsigned_64'Image(Frame_Ptr.sepc) &
-                         " sp=" & Unsigned_64'Image(Frame_Ptr.sp) &
-                         " sstatus=" & Unsigned_64'Image(Frame_Ptr.sstatus) &
-                         " sscratch=" & Unsigned_64'Image(Frame_Ptr.sscratch));
+      Arch.Debug.Print ("Handle_Trap: hart=" & Unsigned_64'Image (Hart_ID) &
+                         " scause=" & Unsigned_64'Image (Frame_Ptr.scause) &
+                         " sepc=" & Unsigned_64'Image (Frame_Ptr.sepc) &
+                         " sp=" & Unsigned_64'Image (Frame_Ptr.sp) &
+                         " sstatus=" & Unsigned_64'Image (Frame_Ptr.sstatus) &
+                         " sscratch=" & Unsigned_64'Image (Frame_Ptr.sscratch));
 
       begin
-         Arch.Debug.Print("Handle_Trap: Starting trap handler");
-         Arch.Debug.Print("Handle_Trap: Invoking Handle_Interrupt");
-         Handle_Interrupt(Frame_Ptr.all);
-         Arch.Debug.Print("Handle_Trap: Handle_Interrupt completed successfully");
+         Arch.Debug.Print ("Handle_Trap: Starting trap handler");
+         Arch.Debug.Print ("Handle_Trap: Invoking Handle_Interrupt");
+         Handle_Interrupt (Frame_Ptr.all);
+         Arch.Debug.Print ("Handle_Trap: Handle_Interrupt completed successfully");
       exception
          when Constraint_Error =>
-            Arch.Debug.Print("Handle_Trap: Constraint error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Constraint error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Constraint error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Constraint error", Frame_Ptr.all);
          when Program_Error =>
-            Arch.Debug.Print("Handle_Trap: Program error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Program error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Program error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Program error", Frame_Ptr.all);
          when Storage_Error =>
-            Arch.Debug.Print("Handle_Trap: Storage error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Storage error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Storage error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Storage error", Frame_Ptr.all);
          when Tasking_Error =>
-            Arch.Debug.Print("Handle_Trap: Tasking error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Tasking error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Tasking error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Tasking error", Frame_Ptr.all);
          when Ada.Interrupts.Interrupt_Error =>
-            Arch.Debug.Print("Handle_Trap: Interrupt error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Interrupt error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Interrupt error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Interrupt error", Frame_Ptr.all);
          when Ada.Exceptions.Synchronous_Exception =>
-            Arch.Debug.Print("Handle_Trap: Synchronous exception during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Synchronous exception", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Synchronous exception during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Synchronous exception", Frame_Ptr.all);
          when Ada.Exceptions.Asynchronous_Exception =>
-            Arch.Debug.Print("Handle_Trap: Asynchronous exception during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Asynchronous exception", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Asynchronous exception during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Asynchronous exception", Frame_Ptr.all);
          when Ada.Exceptions.Storage_Error =>
-            Arch.Debug.Print("Handle_Trap: Storage error during trap handling.");
-            Lib.Panic.Hard_Panic("Handle_Trap: Storage error", Frame_Ptr.all);
+            Arch.Debug.Print ("Handle_Trap: Storage error during trap handling.");
+            Lib.Panic.Hard_Panic ("Handle_Trap: Storage error", Frame_Ptr.all);
          when others =>
-            Arch.Debug.Print("Handle_Trap: Unhandled exception during trap handling.");
-            Lib.Panic.Print_Triple("sepc", "sstatus", "scause",
+            Arch.Debug.Print ("Handle_Trap: Unhandled exception during trap handling.");
+            Lib.Panic.Print_Triple ("sepc", "sstatus", "scause",
                                   Frame_Ptr.sepc,
                                   Frame_Ptr.sstatus,
                                   Frame_Ptr.scause);
-            Lib.Panic.Hard_Panic("Handle_Trap: Unhandled exception", Frame_Ptr.all);
+            Lib.Panic.Hard_Panic ("Handle_Trap: Unhandled exception", Frame_Ptr.all);
       end;
 
       if Is_Syscall then
-         Arch.Debug.Print("Handle_Trap: Syscall handler returned, incrementing sepc");
+         Arch.Debug.Print (
+            "Handle_Trap: Syscall handler returned, incrementing sepc");
          Frame_Ptr.sepc := Frame_Ptr.sepc + 4;
-         Arch.Debug.Print("Handle_Trap: New sepc=" & Unsigned_64'Image(Frame_Ptr.sepc));
+         Arch.Debug.Print ("Handle_Trap: New sepc="
+         & Unsigned_64'Image (Frame_Ptr.sepc));
       end if;
 
       Frame_Ptr.sstatus := Frame_Ptr.sstatus or Arch.CPU.SSTATUS_SPP;
-      Arch.Debug.Print("Handle_Trap: Returning to sepc=" & Unsigned_64'Image(Frame_Ptr.sepc));
-      System.Machine_Code.Asm("j trap_exit", Volatile => True);
+      Arch.Debug.Print (
+         "Handle_Trap: Returning to sepc=" & Unsigned_64'Image (Frame_Ptr.sepc));
+      System.Machine_Code.Asm ("j trap_exit", Volatile => True);
    end Handle_Trap;
 
    ------------------------------------------------------------------------------
@@ -439,17 +502,21 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    procedure Save_FP_Context (Frame_Ptr : in out Frame) is
    begin
-      Arch.Debug.Print("Save_FP_Context: Starting FP context save");
+      Arch.Debug.Print ("Save_FP_Context: Starting FP context save");
       if Frame_Ptr.FP_Context_Ptr = System.Null_Address then
-         Arch.Debug.Print("Save_FP_Context: No FP context to save; skipping.");
+         Arch.Debug.Print ("Save_FP_Context: No FP context to save; skipping.");
          return;
       end if;
       declare
-         FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
+         FP : FP_Conv.Object_Pointer :=
+         FP_Conv.To_Pointer (Frame_Ptr.FP_Context_Ptr);
       begin
-         Arch.Debug.Print("Save_FP_Context: Saving FP context at " & Unsigned_64'Image(Frame_Ptr.FP_Context_Ptr));
-         Arch.Context.Save_FP_Context(FP.all);
-         Arch.Debug.Print("Save_FP_Context: FP context saved successfully");
+         Arch.Debug.Print (
+            "Save_FP_Context: Saving FP context at "
+            & Unsigned_64'Image (Frame_Ptr.FP_Context_Ptr));
+         Arch.Context.Save_FP_Context (FP.all);
+         Arch.Debug.Print (
+            "Save_FP_Context: FP context saved successfully");
       end;
    end Save_FP_Context;
 
@@ -467,20 +534,24 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    ------------------------------------------------------------------------------
    procedure Restore_FP_Context (Frame_Ptr : in out Frame) is
    begin
-      Arch.Debug.Print("Restore_FP_Context: Starting FP context restore");
+      Arch.Debug.Print ("Restore_FP_Context: Starting FP context restore");
       if Frame_Ptr.FP_Context_Ptr /= System.Null_Address then
          declare
-            FP : FP_Conv.Object_Pointer := FP_Conv.To_Pointer(Frame_Ptr.FP_Context_Ptr);
+            FP : FP_Conv.Object_Pointer :=
+            FP_Conv.To_Pointer (Frame_Ptr.FP_Context_Ptr);
          begin
-            Arch.Context.Load_FP_Context(FP.all);
-            Arch.Debug.Print("Restore_FP_Context: FP context restored successfully");
+            Arch.Context.Load_FP_Context (FP.all);
+            Arch.Debug.Print (
+               "Restore_FP_Context: FP context restored successfully");
          exception
             when E : others =>
-               Arch.Debug.Print("Restore_FP_Context: Error during FP context restore: " & Exception_Message(E));
-               Lib.Panic.Hard_Panic("Restore_FP_Context: Error", Frame_Ptr);
+               Arch.Debug.Print (
+                  "Restore_FP_Context: Error during FP context restore: "
+                  & Exception_Message (E));
+               Lib.Panic.Hard_Panic ("Restore_FP_Context: Error", Frame_Ptr);
          end;
       end if;
-      Arch.Debug.Print("Restore_FP_Context: FP context restore completed");
+      Arch.Debug.Print ("Restore_FP_Context: FP context restore completed");
    end Restore_FP_Context;
 
    ------------------------------------------------------------------------------
@@ -488,10 +559,11 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    --
    -- Handles system calls from userland.
    --
-   -- This procedure is invoked when a syscall interrupt occurs (scause equals SYSCALL_INT_CODE).
-   -- It retrieves the current thread ID, signals kernel entry, dispatches the syscall (using
-   -- Dispatch_Syscall), signals kernel exit, and logs all operations. If an error is encountered,
-   -- a hard panic is triggered.
+   -- This procedure is invoked when a syscall interrupt occurs (scause equals
+   --  SYSCALL_INT_CODE). It retrieves the current thread ID, signals kernel
+   --  entry, dispatches the syscall (using Dispatch_Syscall), signals kernel
+   --  exit, and logs all operations. If an error is encountered, a hard panic
+   --  is triggered.
    --
    -- Parameters:
    --   State : The trap frame containing the syscall state and arguments.
@@ -499,16 +571,17 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    procedure Syscall_Handler (State : in out Frame) is
       Thread_ID : constant Scheduler.TID := Arch.Local.Get_Current_Thread;
    begin
-      Arch.Debug.Print("Syscall_Handler: Starting syscall handler for thread " &
-                        Natural'Image(Scheduler.Convert(Thread_ID)));
+      Arch.Debug.Print ("Syscall_Handler: Starting syscall handler for thread " &
+                        Natural'Image (Scheduler.Convert (Thread_ID)));
       if Thread_ID = Scheduler.Error_TID then
-         Lib.Panic.Hard_Panic("Syscall invoked with Error_TID", State);
+         Lib.Panic.Hard_Panic ("Syscall invoked with Error_TID", State);
          return;
       end if;
-      Scheduler.Signal_Kernel_Entry(Thread_ID);
-      Dispatch_Syscall(State, State.x10_a0, State.x11_a1);
-      Scheduler.Signal_Kernel_Exit(Thread_ID);
-      Arch.Debug.Print("Syscall_Handler: Syscall completed; returning to userland");
+      Scheduler.Signal_Kernel_Entry (Thread_ID);
+      Dispatch_Syscall (State, State.x10_a0, State.x11_a1);
+      Scheduler.Signal_Kernel_Exit (Thread_ID);
+      Arch.Debug.Print (
+         "Syscall_Handler: Syscall completed; returning to userland");
    end Syscall_Handler;
 
 end Arch.Interrupts;
