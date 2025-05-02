@@ -191,7 +191,7 @@ package body Arch.Entrypoint is
          else
             Arch.Debug.Print ("[Warning] Memmap is empty");
          end if;
-         for E of Info.Memmap [1 .. Info.Memmap_Len] loop
+         for E of Info.Memmap (1 .. Info.Memmap_Len) loop
             Addr := E.Start + E.Length;
             Arch.Debug.Print (
                "[" & E.Start'Image & " - " & Addr'Image & "] " &
