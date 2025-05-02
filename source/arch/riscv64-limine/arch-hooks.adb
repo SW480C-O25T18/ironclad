@@ -46,11 +46,11 @@ package body Arch.Hooks is
    function Devices_Hook return Boolean is
    begin
       Debug.Print ("Devices_Hook: Initializing UART0");
-      return Devices.UART.Init_UART0;
+      Devices.UART.Init_UART0;
+      return True;
    exception
       when others =>
-         Debug.Print (
-            "Devices_Hook: Exception occurred during UART0 initialization");
+         Debug.Print ("Devices_Hook: Exception occurred during UART0 initialization");
          return False;
    end Devices_Hook;
 
