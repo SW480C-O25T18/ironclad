@@ -90,6 +90,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    --  pragma Assert (Frame.sstatus'Position     = 272);
    --  pragma Assert (Frame.FP_Context_Ptr'Position = 280);
 
+   function Get_TCP_OFFSET return Unsigned_64;
    ---------------------------------------------------------------------------
    --  Initialization
    ---------------------------------------------------------------------------

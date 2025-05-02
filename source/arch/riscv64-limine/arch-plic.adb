@@ -17,7 +17,6 @@
 with System; use System;
 with System.Storage_Elements; use System.Storage_Elements;
 with Interfaces; use Interfaces;
-with Ada.Assertions;
 with System.Machine_Code; use System.Machine_Code;
 with Arch.Debug;
 

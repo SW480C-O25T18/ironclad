@@ -30,11 +30,11 @@ package body Arch.CPU with SPARK_Mode => Off is
    -- Helpers to reinterpret a raw address as the SMP response record
    -- and to reinterpret any Address as Unsigned_64 for asm inputs.
    -------------------------------------------------------------------
+   type SMP_Response_Ptr is access all Limine.RISCV64_SMP_Response;
    function Addr_To_SMP_Response is
-     new Ada.Unchecked_Conversion (
-       Source => System.Address,
-       Target => Limine.RISCV64_SMP_Response
-     );
+   new Ada.Unchecked_Conversion (
+      Source => System.Address,
+      Target => SMP_Response_Ptr);
 
    function Addr_To_U64 is
      new Ada.Unchecked_Conversion (

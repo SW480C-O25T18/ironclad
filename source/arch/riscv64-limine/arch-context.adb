@@ -28,8 +28,10 @@ with Memory.Physical;     use Memory.Physical;
 with Ada.Unchecked_Conversion;
 with Arch.CPU;            use Arch.CPU;
 with Arch.Local;          use Arch.Local;
-with Arch.Interrupts;     use Arch.Interrupts;
+with Arch.Interrupts;      use Arch.Interrupts;
+with Arch.Debug;         use Arch.Debug;
 with Arch.Snippets;       use Arch.Snippets;
+with Lib.Panic;         use Lib.Panic;
 
 package body Arch.Context is
 
@@ -73,7 +75,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Set_Memory: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Set_Memory: Constraint_Error");
    end Set_Memory;
 
    --  “Free” is a no-op for context buffers
@@ -138,6 +140,20 @@ package body Arch.Context is
       end if;
    end Setup_FP_Routines;
 
+   -- Private helper function in arch-context.adb
+   function Get_Current_Context return Core_Context is
+      TCB : constant System.Address := Arch.Local.Fetch_TCB;
+   begin
+      if TCB = System.Null_Address then
+         Arch.Debug.Print ("Get_Current_Context: TCB is null");
+         return 0;
+      else
+         return Core_Context (
+            Address_To_Unsigned_64 (TCB)
+            + Interrupts.Get_TCP_OFFSET);
+      end if;
+   end Get_Current_Context;
+
    ----------------------------------------------------------------------------
    --  General-Purpose Context Management
    ----------------------------------------------------------------------------
@@ -174,7 +190,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Init_GP_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Init_GP_Context: Constraint_Error");
    end Init_GP_Context;
 
    --  Load saved GP context and return (no return)
@@ -201,7 +217,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Load_GP_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Load_GP_Context: Constraint_Error");
    end Load_GP_Context;
 
    --  Save current thread's core context ID
@@ -211,7 +227,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Save_Core_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Save_Core_Context: Constraint_Error");
    end Save_Core_Context;
 
    --  After fork: child returns zero & skips syscall
@@ -221,7 +237,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Success_Fork_Result: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Success_Fork_Result: Constraint_Error");
    end Success_Fork_Result;
 
    ----------------------------------------------------------------------------
@@ -230,14 +246,15 @@ package body Arch.Context is
 
    --  Init FP context for new thread
    procedure Init_FP_Context (Ctx : out FP_Context) is
-      Addr  : System.Address := System.Address (Alloc (FP_Context'Size));
+      Addr  : System.Address := FP_Context'Address;
    begin
-      Set_Memory (Addr, System.Storage_Elements.Integer_Address (FP_Context'Size), 0);
+      Set_Memory (Addr,
+         System.Storage_Elements.Integer_Address (FP_Context'Size), 0);
       Ctx := Addr;
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Init_FP_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Init_FP_Context: Constraint_Error");
    end Init_FP_Context;
 
    --  Save FP context
@@ -247,7 +264,7 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Save_FP_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Save_FP_Context: Constraint_Error");
    end Save_FP_Context;
 
    --  Load FP context
@@ -257,18 +274,21 @@ package body Arch.Context is
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Load_FP_Context: Constraint_Error encountered");
-         raise;
+         Lib.Panic.Hard_Panic ("Load_FP_Context: Constraint_Error");
    end Load_FP_Context;
 
    --  Destroy FP context
    procedure Destroy_FP_Context (Ctx : in out FP_Context) is
    begin
-      Free_Memory (Ctx, System.Storage_Elements.Integer_Address (FP_Context'Size));
+      Free_Memory (
+         U64_To_Addr (Unsigned_64 (Ctx)),
+         System.Storage_Elements.Integer_Address (FP_Context'Size)
+      );
       Ctx := System.Null_Address;
    exception
       when Constraint_Error =>
          Arch.Debug.Print ("Destroy_FP_Context: Constraint_Error encountered");
-         raise;
+         Ctx := System.Null_Address; -- Ensure Ctx is nullified to avoid further issues
    end Destroy_FP_Context;
 
 end Arch.Context;

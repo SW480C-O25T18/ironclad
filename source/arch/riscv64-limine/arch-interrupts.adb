@@ -54,6 +54,8 @@ package body Arch.Interrupts with SPARK_Mode => Off is
    -- RISCV64 TCB layout.
    ------------------------------------------------------------------------------
    TCB_CONTEXT_OFFSET : constant Natural := 72;  -- Adjust as necessary
+   function Get_TCP_OFFSET return Unsigned_64 is
+      (To_Address(TCB_CONTEXT_OFFSET));
 
    ------------------------------------------------------------------------------
    -- Get_Current_Context
