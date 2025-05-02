@@ -57,4 +57,6 @@ package Arch.CLINT is
    --  Memory barrier.
    procedure Memory_Barrier;
 
+   function Reg (Addr : System.Address) return Reg_Ptr;
+
 end Arch.CLINT;

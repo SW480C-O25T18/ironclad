@@ -142,7 +142,7 @@ package body Arch.CLINT is
         Address_To_U64(Get_CLINT_Base) + Get_MTimecmp_Offset + Hart_ID * 8);
       R : Reg_Ptr := Reg(Addr);
    begin
-      return R.all;
+      return Unsigned_64 (R.all); -- Explicit conversion
    end Get_Timer_Compare;
 
 end Arch.CLINT;
