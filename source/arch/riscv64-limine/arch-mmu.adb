@@ -319,95 +319,97 @@ end Init;
    end Fork_Table;
 
    procedure Destroy_Table (Map : in out Page_Table_Acc) is
-      procedure Free_Page_Table is
-      new Ada.Unchecked_Deallocation(Page_Table, Page_Table_Acc);
-
-      type Mapping_Range_Acc is access all Mapping_Range;
-      procedure Free_Mapping_Range is
-      new Ada.Unchecked_Deallocation(Mapping_Range, Mapping_Range_Acc);
-
-      Curr_Range : Mapping_Range_Acc;
-      Last_Range : Mapping_Range_Acc;
-
-
-
-      function Is_Valid_Entry (Map : in out Page_Table_Acc return Boolean is
       begin
-      return (Map.Page_Table_Entries.V) /= 0;
-      end Is_Valid_Entry;
+         Map := null;
+--        procedure Free_Page_Table is
+--        new Ada.Unchecked_Deallocation(Page_Table, Page_Table_Acc);
+
+--        type Mapping_Range_Acc is access all Mapping_Range;
+--        procedure Free_Mapping_Range is
+--        new Ada.Unchecked_Deallocation(Mapping_Range, Mapping_Range_Acc);
+
+--        Curr_Range : Mapping_Range_Acc;
+--        Last_Range : Mapping_Range_Acc;
 
 
-   begin
- -- todo: adjust to use satp that points to the correct ppn of the root table, should be done in init??
-   -- add lock here
-      Lib.Synchronization.Seize_Writer (Map.Mutex);
 
-      if Map.Root = null then
-         -- Nothing to do if there's no root table
-         Free_Page_Table (Map);
-         return;
-      end if;
+--        function Is_Valid_Entry (Map : in out Page_Table_Acc) return Boolean is
+--        begin
+--        return (Map.Page_Table_Entries.V) /= 0;
+--        end Is_Valid_Entry;
+
+
+--     begin
+--   -- todo: adjust to use satp that points to the correct ppn of the root table, should be done in init??
+--     -- add lock here
+--        Lib.Synchronization.Seize_Writer (Map.Mutex);
+
+--        if Map.Root = null then
+--           -- Nothing to do if there's no root table
+--           Free_Page_Table (Map);
+--           return;
+--        end if;
       
-      for i in 1 .. 256 loop -- avoid kernel-space entries Page_Table_Entries
-         declare
-            L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
-            L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
-         begin
-            if Is_Valid_Entry(L3_Entry) then
+--        for i in 1 .. 256 loop -- avoid kernel-space entries Page_Table_Entries
+--           declare
+--              L3_Entry_Addr : Unsigned_64 := i * 64; -- offset for each page entry is 64 bits up to 512 * 64 = 4096 bits
+--              L3_Entry : Page_Table_Entry with Address => L3_Entry_Addr'Address;
+--           begin
+--              if Is_Valid_Entry(L3_Entry) then
                
-               L2_Phys := Extract_Physical_Addr(L3_Entry);
+--                 L2_Phys := Extract_Physical_Addr(L3_Entry);
 
-               --  L2_Virt := To_Address(Memory_Offset + L2_Phys);
-               declare
-                  L2 : Page_Level;
-                  --  with Import, Address => L2_Virt;
+--                 --  L2_Virt := To_Address(Memory_Offset + L2_Phys);
+--                 declare
+--                    L2 : Page_Level;
+--                    --  with Import, Address => L2_Virt;
 
-               begin
-                  -- Walk all 512 entries in L2
-                  for j in Index_Range loop
+--                 begin
+--                    -- Walk all 512 entries in L2
+--                    for j in Index_Range loop
                      
-                     L2_Entry_Addr : Unsigned_64 := j * 64;
-                     L2_Entry : Page_Table_Entry with Address => L2_Entry_Addr'Address;
+--                       L2_Entry_Addr : Unsigned_64 := j * 64;
+--                       L2_Entry : Page_Table_Entry with Address => L2_Entry_Addr'Address;
 
-                     if Is_Valid_Entry(L2_Entry) then
-                        L1_Phys := Extract_Physical_Addr(L2_Entry);
-                        --  L1_Virt := To_Address(Memory_Offset + L1_Phys);
+--                       if Is_Valid_Entry(L2_Entry) then
+--                          L1_Phys := Extract_Physical_Addr(L2_Entry);
+--                          --  L1_Virt := To_Address(Memory_Offset + L1_Phys);
 
-                        declare
-                           L1 : Page_Level;
-                           --  with Import, Address => L1_Virt;
-                        begin
-                           -- Walk all 512 entries in L1
-                           for k in Index_Range loop
-                              L1_Entry_Addr : Unsigned_64 := k * 64;
-                              L1_Entry : Page_Table_Entry with Address => L1_Entry_Addr'Address;
-                              if Is_Valid_Entry(L1_Entry) then
-                                 -- L1(k) references an actual page frame
-                                 Frame_Phys := Extract_Physical_Addr(L1_Entry) + Memory.Memory_Offset;
-                                 -- Free the final data page
-                                 Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
-                              end if;
-                           end loop;
+--                          declare
+--                             L1 : Page_Level;
+--                             --  with Import, Address => L1_Virt;
+--                          begin
+--                             -- Walk all 512 entries in L1
+--                             for k in Index_Range loop
+--                                L1_Entry_Addr : Unsigned_64 := k * 64;
+--                                L1_Entry : Page_Table_Entry with Address => L1_Entry_Addr'Address;
+--                                if Is_Valid_Entry(L1_Entry) then
+--                                   -- L1(k) references an actual page frame
+--                                   Frame_Phys := Extract_Physical_Addr(L1_Entry) + Memory.Memory_Offset;
+--                                   -- Free the final data page
+--                                   Memory.Physical.Free(Interfaces.C.size_t(Frame_Phys));
+--                                end if;
+--                             end loop;
 
-                           -- Free the entire L1 table page after clearing all entries
-                           Memory.Physical.Free(Interfaces.C.size_t(L1_Phys));
-                        end;
-                     end if;
-                  end loop;
+--                             -- Free the entire L1 table page after clearing all entries
+--                             Memory.Physical.Free(Interfaces.C.size_t(L1_Phys));
+--                          end;
+--                       end if;
+--                    end loop;
 
-                  -- Now free the L2 table page
-                  Memory.Physical.Free(Interfaces.C.size_t(L2_Phys));
-               end;
-            end if;
-         end;
-      end loop;
+--                    -- Now free the L2 table page
+--                    Memory.Physical.Free(Interfaces.C.size_t(L2_Phys));
+--                 end;
+--              end if;
+--           end;
+--        end loop;
       
-      Free_Page_Table (Map);
+--        Free_Page_Table (Map);
 
-   exception
-      when Constraint_Error =>
-         --  In case of any pointer issues, just return quietly (or raise an error).
-         return;
+--     exception
+--        when Constraint_Error =>
+--           --  In case of any pointer issues, just return quietly (or raise an error).
+--           return;
    end Destroy_Table;
 -----------------------------------------------------------------
 --  Install Map as the current address space (Sv39, ASID unchanged).
