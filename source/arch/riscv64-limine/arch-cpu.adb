@@ -70,7 +70,7 @@ package body Arch.CPU with SPARK_Mode => Off is
       end if;
 
       -- Reinterpret the returned pointer as our response record:
-      Response := Addr_To_SMP_Response (SMP_Request.Base.Response);
+      Response := Addr_To_SMP_Response (SMP_Request.Base.Response).all;
 
       Arch.Debug.Print ("Init_Cores: Received SMP response from Limine.");
       Core_Count := Natural (Response.CPU_Count);
