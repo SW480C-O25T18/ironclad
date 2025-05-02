@@ -114,4 +114,21 @@ package body Arch.Limine with SPARK_Mode => Off is
       when Constraint_Error =>
          Lib.Messages.Put_Line ("Exception encountered translating limine");
    end Translate_Proto;
+
+   procedure Initialize_DTB is
+      DTB_Response : constant DTB_Response
+         with Import, Address => DTB_Request.Response;
+   begin
+      if DTB_Response.Base.Revision /= 0 then
+         Lib.Messages.Put_Line("DTB_Response: Revision is not supported.");
+         return;
+      end if;
+
+      if DTB_Response.DTB_Addr = System.Null_Address then
+         Lib.Messages.Put_Line("DTB_Response: DTB address is null.");
+         return;
+      end if;
+
+      Lib.Messages.Put_Line("DTB_Response: DTB address = " & Address'Image(DTB_Response.DTB_Addr));
+   end Initialize_DTB;
 end Arch.Limine;

@@ -64,6 +64,23 @@ package body Arch.DTB with SPARK_Mode => Off is
    -- Helper Functions
    -----------------------------------------------------------------------------
 
+   function Contains_Substring(Haystack : String; Needle : String) return Boolean is
+      Haystack_Len : constant Natural := Haystack'Length;
+      Needle_Len   : constant Natural := Needle'Length;
+   begin
+      if Needle_Len = 0 or else Haystack_Len < Needle_Len then
+         return False;
+      end if;
+
+      for I in Haystack'First .. Haystack'Last - Needle_Len + 1 loop
+         if Haystack(I .. I + Needle_Len - 1) = Needle then
+            return True;
+         end if;
+      end loop;
+
+      return False;
+   end Contains_Substring;
+
    -- Convert 32-bit big-endian to host order
    function BE_To_Host(Val : Unsigned_32) return Unsigned_32 is
       B0, B1, B2, B3 : Unsigned_32;
@@ -204,10 +221,15 @@ package body Arch.DTB with SPARK_Mode => Off is
    function Init return Boolean is
       type HDR_Ptr is access all FDT_Header;
       function To_HDR_Ptr is new Ada.Unchecked_Conversion(Address, HDR_Ptr);
-      HDR : HDR_Ptr := To_HDR_Ptr(DTB_Response.DTB_Addr);
+      HDR : HDR_Ptr := To_HDR_Ptr(Arch.Limine.DTB_Response.DTB_Addr);
    begin
+      if Arch.Limine.DTB_Response.DTB_Addr = System.Null_Address then
+         Arch.Debug.Print("Init: DTB address is null. Cannot initialize DTB.");
+         return False;
+      end if;
+
       if HDR = null then
-         Arch.Debug.Print("Init: No DTB response");
+         Arch.Debug.Print("Init: No DTB response.");
          return False;
       end if;
 
@@ -291,7 +313,7 @@ package body Arch.DTB with SPARK_Mode => Off is
       begin
          for I in 1 .. N.Prop_Count loop
             if N.Properties(I).Name = "compatible" and then
-               Ada.Strings.Fixed.Index(N.Properties(I).Name, Compat) > 0 then
+               Contains_Substring(N.Properties(I).Value, Compat) then
                return N;
             end if;
          end loop;

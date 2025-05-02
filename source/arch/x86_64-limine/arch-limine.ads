@@ -244,6 +244,13 @@ package Arch.Limine with SPARK_Mode => Off is
       [Limine_Common_Magic_1, Limine_Common_Magic_2,
        16#b40ddb48fb54bac7#, 16#545081493f81ffb7#];
 
+   -- Response is a pointer to a DTB_Response.
+   DTB_Request : Request :=
+      (ID       => DTB_ID,
+      Revision => 0,
+      Response => System.Null_Address)
+      with Export, Async_Writers;
+
 private
 
    --  Here lie requests that all limine architectures will depend on, and
