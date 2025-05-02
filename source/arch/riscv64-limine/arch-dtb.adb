@@ -117,6 +117,10 @@ package body Arch.DTB with SPARK_Mode => Off is
          end if;
       end loop;
       return Result(1 .. Len);
+   exception
+      when others =>
+         Arch.Debug.Print("Read_Null_String: Exception occurred while reading string.");
+         return "";
    end Read_Null_String;
 
    -----------------------------------------------------------------------------

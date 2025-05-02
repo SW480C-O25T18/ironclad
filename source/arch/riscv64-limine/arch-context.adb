@@ -35,6 +35,7 @@ with Lib.Panic;         use Lib.Panic;
 
 package body Arch.Context is
 
+   type Byte_Ptr is access all Unsigned_8;
    ----------------------------------------------------------------------------
    --  Helper Functions for Type Conversions
    ----------------------------------------------------------------------------
@@ -119,6 +120,50 @@ package body Arch.Context is
    D_Extension_Bit  : constant Unsigned_64 := 2#1000000#; --  D-ext (bit 6)
    SSTATUS_SPP      : constant Unsigned_64 := 2#100000000#; --  SPP (bit 8)
 
+   ----------------------------------------------------------------------------
+   --  Floating-Point Context Management
+   ----------------------------------------------------------------------------
+
+   -- Save FP context for double-precision (D-extension)
+   procedure Save_FP_Context_D (Ctx : in out FP_Context) is
+   begin
+      Arch.Debug.Print("Save_FP_Context_D: Saving double-precision FP context");
+      Machine_Code.Asm("fsd f0, 0(%0); fsd f1, 8(%0); fsd f2, 16(%0); ...",
+         Inputs => (Unsigned_64'Asm_Input("r", Addr_To_U64(Ctx))),
+         Clobber => "memory",
+         Volatile => True);
+   end Save_FP_Context_D;
+
+   -- Load FP context for double-precision (D-extension)
+   procedure Load_FP_Context_D (Ctx : FP_Context) is
+   begin
+      Arch.Debug.Print("Load_FP_Context_D: Loading double-precision FP context");
+      Machine_Code.Asm("fld f0, 0(%0); fld f1, 8(%0); fld f2, 16(%0); ...",
+         Inputs => (Unsigned_64'Asm_Input("r", Addr_To_U64(Ctx))),
+         Clobber => "memory",
+         Volatile => True);
+   end Load_FP_Context_D;
+
+   -- Save FP context for single-precision (F-extension)
+   procedure Save_FP_Context_F (Ctx : in out FP_Context) is
+   begin
+      Arch.Debug.Print("Save_FP_Context_F: Saving single-precision FP context");
+      Machine_Code.Asm("fsw f0, 0(%0); fsw f1, 4(%0); fsw f2, 8(%0); ...",
+         Inputs => (Unsigned_64'Asm_Input("r", Addr_To_U64(Ctx))),
+         Clobber => "memory",
+         Volatile => True);
+   end Save_FP_Context_F;
+
+   -- Load FP context for single-precision (F-extension)
+   procedure Load_FP_Context_F (Ctx : FP_Context) is
+   begin
+      Arch.Debug.Print("Load_FP_Context_F: Loading single-precision FP context");
+      Machine_Code.Asm("flw f0, 0(%0); flw f1, 4(%0); flw f2, 8(%0); ...",
+         Inputs => (Unsigned_64'Asm_Input("r", Addr_To_U64(Ctx))),
+         Clobber => "memory",
+         Volatile => True);
+   end Load_FP_Context_F;
+   
    --  FP save/load dispatch types
    type FP_Save_Routine_Type is access procedure (Ctx : in out FP_Context);
    type FP_Load_Routine_Type is access procedure (Ctx : FP_Context);
@@ -133,10 +178,16 @@ package body Arch.Context is
          if (MISA_Value and D_Extension_Bit) /= 0 then
             FP_Save_Routine := Save_FP_Context_D'Access;
             FP_Load_Routine := Load_FP_Context_D'Access;
+            Arch.Debug.Print("Setup_FP_Routines: Using double-precision FP routines");
          else
             FP_Save_Routine := Save_FP_Context_F'Access;
             FP_Load_Routine := Load_FP_Context_F'Access;
+            Arch.Debug.Print("Setup_FP_Routines: Using single-precision FP routines");
          end if;
+      else
+         FP_Save_Routine := FP_Save_NoOp'Access;
+         FP_Load_Routine := FP_Load_NoOp'Access;
+         Arch.Debug.Print("Setup_FP_Routines: No FP extensions detected, using no-op routines");
       end if;
    end Setup_FP_Routines;
 

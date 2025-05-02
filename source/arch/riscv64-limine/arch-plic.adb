@@ -219,7 +219,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
          & ", Interrupt_ID: " & Unsigned_64'Image(Interrupt_ID));
 
       Complete_Reg := Reg(PLIC_Address(Ctx_Base + Get_Threshold_Offset + 4));
-      Complete_Reg.all := Interrupt_ID;
+      Complete_Reg.all := Reg_Type(Interrupt_ID);
 
       Arch.Debug.Print("Complete: Interrupt ID " & Unsigned_64'Image(Interrupt_ID)
          & " completed for Hart_ID: " & Unsigned_64'Image(Hart_ID)
