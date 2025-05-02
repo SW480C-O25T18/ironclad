@@ -77,10 +77,6 @@ package body Arch.CLINT is
    end Memory_Barrier;
 
    --  MMIO Access.
-   type Reg_Type is new Unsigned_64;
-   pragma Volatile (Reg_Type);
-   type Reg_Ptr is access all Reg_Type;
-
    function To_Reg_Ptr is new Ada.Unchecked_Conversion
      (Source => System.Address, Target => Reg_Ptr);
 

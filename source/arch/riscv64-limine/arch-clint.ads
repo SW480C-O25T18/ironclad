@@ -57,6 +57,11 @@ package Arch.CLINT is
    --  Memory barrier.
    procedure Memory_Barrier;
 
+   --  Read and write operations.
+   type Reg_Type is new Unsigned_64;
+   pragma Volatile (Reg_Type);
+   type Reg_Ptr is access all Reg_Type;
+
    function Reg (Addr : System.Address) return Reg_Ptr;
 
 end Arch.CLINT;
