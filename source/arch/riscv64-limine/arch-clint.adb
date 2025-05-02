@@ -60,10 +60,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
    -----------------------------------------------------------------------------
    procedure Set_CLINT_Configuration (
       Base_Address     : System.Address := System'To_Address(16#02000000#);
-      MSIP_Offset      : Unsigned_64   := 0;
-      MTime_Offset     : Unsigned_64   := 16#BFF8#;
-      MTimecmp_Offset  : Unsigned_64   := 16#4000#;
-      Enabled          : Boolean       := True
+     MSIP_Offset      : Unsigned_64   := 0;
+     MTime_Offset     : Unsigned_64   := 16#BFF8#;
+     MTimecmp_Offset  : Unsigned_64   := 16#4000#;
+     Enabled          : Boolean       := True
    ) is
    begin
       CLINT_State.Base_Address    := Base_Address;
@@ -124,9 +124,11 @@ package body Arch.CLINT with SPARK_Mode => Off is
    -----------------------------------------------------------------------------
    procedure Memory_Barrier is
    begin
-      Arch.Debug.Print ("Memory_Barrier: Executing memory barrier");
+      -- Issue a memory fence instruction to ensure memory ordering.
       Asm ("fence", Volatile => True, Clobber => "memory");
-      Arch.Debug.Print ("Memory_Barrier: Memory barrier executed");
+
+      -- Log the memory barrier execution for debugging purposes.
+      Arch.Debug.Print ("Memory_Barrier: Executed");
    end Memory_Barrier;
 
    -----------------------------------------------------------------------------
@@ -145,27 +147,27 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Target => MSIP_Ptr
       );
 
+      -- Calculate the address of the MSIP register for the given Hart ID.
       Base_Int : constant Unsigned_64 := Address_To_U64 (Get_CLINT_Base);
       Offset   : constant Unsigned_64 :=
-        Base_Int + Address_To_U64 (Get_MSIP_Offset) + Hart_ID * 4;
-      Addr     : constant System.Address := U64_To_Address (Offset);
-      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
+      Base_Int + Address_To_U64 (Get_MSIP_Offset) + Hart_ID * 4;
+      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (U64_To_Address (Offset));
    begin
-      if not CLINT_Enabled then
-         Arch.Debug.Print ("Set_Software_Interrupt: CLINT is disabled");
-         return;
-      end if;
-
-      Arch.Debug.Print ("Set_Software_Interrupt: Setting MSIP for Hart_ID = "
-         & Unsigned_64'Image (Hart_ID) & " to " & Boolean'Image (Value));
-
+      -- Write the value to the MSIP register.
       if Value then
          MSIP_Reg.all := 1;
       else
          MSIP_Reg.all := 0;
       end if;
 
+      -- Ensure memory ordering with a memory barrier.
       Memory_Barrier;
+
+      -- Log the operation for debugging purposes.
+      Arch.Debug.Print (
+         "Set_Software_Interrupt: Hart_ID = " & Unsigned_64'Image (Hart_ID) &
+         ", Value = " & Boolean'Image (Value)
+      );
    end Set_Software_Interrupt;
 
    procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64) is
@@ -185,17 +187,13 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Target => MSIP_Ptr
       );
 
+      -- Calculate the address of the MSIP register for the given Hart ID.
       Base_Int : constant Unsigned_64 := Address_To_U64 (Get_CLINT_Base);
       Offset   : constant Unsigned_64 :=
-        Base_Int + Address_To_U64 (Get_MSIP_Offset) + Hart_ID * 4;
-      Addr     : constant System.Address := U64_To_Address (Offset);
-      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (Addr);
+      Base_Int + Address_To_U64 (Get_MSIP_Offset) + Hart_ID * 4;
+      MSIP_Reg : MSIP_Ptr := To_MSIP_Ptr (U64_To_Address (Offset));
    begin
-      if not CLINT_Enabled then
-         Arch.Debug.Print ("Read_Software_Interrupt: CLINT is disabled");
-         return False;
-      end if;
-
+      -- Return True if the MSIP register is non-zero, otherwise False.
       return MSIP_Reg.all /= 0;
    end Read_Software_Interrupt;
 
@@ -212,10 +210,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Target => Time_Ptr
       );
 
-      Addr     : constant System.Address :=
-        U64_To_Address (Address_To_U64 (Get_CLINT_Base) + Address_To_U64 (Get_MTime_Offset));
-      Time_Reg : Time_Ptr := To_Time_Ptr (Addr);
+      -- Calculate the address of the `mtime` register.
+      Base_Int : constant Unsigned_64 := Address_To_U64 (Get_CLINT_Base);
+      Offset   : constant Unsigned_64 := Base_Int + Address_To_U64 (Get_MTime_Offset);
+      Time_Reg : Time_Ptr := To_Time_Ptr (U64_To_Address (Offset));
    begin
+      -- Return the value of the `mtime` register.
       return Time_Reg.all;
    end Get_MTime;
 
@@ -232,15 +232,23 @@ package body Arch.CLINT with SPARK_Mode => Off is
          Target => Time_Ptr
       );
 
-      Addr     : constant System.Address :=
-        U64_To_Address (Address_To_U64 (Get_CLINT_Base) + Address_To_U64 (Get_MTimecmp_Offset) + Hart_ID * 8);
-      Time_Reg : Time_Ptr := To_Time_Ptr (Addr);
+      -- Calculate the address of the `mtimecmp` register for the given Hart ID.
+      Base_Int : constant Unsigned_64 := Address_To_U64 (Get_CLINT_Base);
+      Offset   : constant Unsigned_64 :=
+      Base_Int + Address_To_U64 (Get_MTimecmp_Offset) + Hart_ID * 8;
+      Time_Reg : Time_Ptr := To_Time_Ptr (U64_To_Address (Offset));
    begin
-      Arch.Debug.Print ("Set_Timer_Compare: Setting timer compare for Hart_ID = "
-         & Unsigned_64'Image (Hart_ID) & " to " & Unsigned_64'Image (Time));
-
+      -- Write the time value to the `mtimecmp` register.
       Time_Reg.all := Time;
+
+      -- Ensure memory ordering with a memory barrier.
       Memory_Barrier;
+
+      -- Log the operation for debugging purposes.
+      Arch.Debug.Print (
+         "Set_Timer_Compare: Hart_ID = " & Unsigned_64'Image (Hart_ID) &
+         ", Time = " & Unsigned_64'Image (Time)
+      );
    end Set_Timer_Compare;
 
    function Get_Timer_Compare (
