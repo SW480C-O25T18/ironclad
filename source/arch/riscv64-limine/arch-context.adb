@@ -70,9 +70,11 @@ package body Arch.Context is
       );
       P : Byte_Ptr := To_Byte_Ptr (Base);
    begin
-      for I in 0 .. Len - 1 loop
-         P (I) := B;
-      end loop;
+      if P /= null and then Len > 0 then
+         for I in 0 .. Integer (Len) - 1 loop
+            P (I) := B;
+         end loop;
+      end if;
    end Set_Memory;
 
    --  “Free” is a no-op for context buffers
