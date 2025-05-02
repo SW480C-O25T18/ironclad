@@ -128,7 +128,7 @@ package body Arch.CLINT is
         Address_To_U64(Get_CLINT_Base) + Get_MTimecmp_Offset + Hart_ID * 8);
       R : Reg_Ptr := Reg(Addr);
    begin
-      R.all := Time;
+      R.all := Reg_Type(Time); -- Explicit conversion to match the expected type
       Arch.Debug.Print("CLINT: Timer compare set for Hart_ID = " &
         Unsigned_64'Image(Hart_ID));
    end Set_Timer_Compare;
