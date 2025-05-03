@@ -1,5 +1,7 @@
---  arch-exceptions.ads: Specification of Platform-Level Interrupt Controller (PLIC) utilities.
+--  arch-plic.adb: Implementation of Platform-Level Interrupt Controller
+--  (PLIC) utilities.
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  Based on RISC-V PLIC v1.0/v1.1 specifications
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -12,214 +14,235 @@
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.
+--  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma SPARK_Mode (Off);
-
-with System;              use System;
-with System.Storage_Elements; use System.Storage_Elements;
-with Interfaces;          use Interfaces;
-with System.Machine_Code; use System.Machine_Code;
-with Arch.Debug;
-with Ada.Unchecked_Conversion;
+with Interfaces;               use Interfaces;
+with System;                   use System;
+with System.Storage_Elements;  use System.Storage_Elements;
+with Arch.CPU;                 use Arch.CPU;
+with Arch.DTB;                 use Arch.DTB;
+with Arch.MMU;                 use Arch.MMU;
+with Arch.Debug;               use Arch.Debug;
+with Lib.Panic;                use Lib.Panic;
 
 package body Arch.PLIC is
 
-   -----------------------------------------------------------------------------
-   --  Configuration Variables
-   -----------------------------------------------------------------------------
-   PLIC_Base_Address         : constant System.Address := To_Address(16#0C000000#);
-   PLIC_Priority_Offset      : constant Unsigned_64    := 0;
-   PLIC_Context_Base_Offset  : constant Unsigned_64    := 16#200000#;
-   PLIC_Context_Stride       : constant Unsigned_64    := 16#1000#;
-   PLIC_Threshold_Offset     : constant Unsigned_64    := 0;
-   PLIC_Max_Interrupt_ID     : constant Unsigned_64    := 1023;
-   PLIC_Max_Harts            : constant Unsigned_64    := 1;
-   PLIC_Contexts_Per_Hart    : constant Unsigned_64    := 1;
-   PLIC_Enabled              : Boolean                 := True;
-
-   -----------------------------------------------------------------------------
-   --  Helper Functions
-   -----------------------------------------------------------------------------
-
-   -- Convert System.Address to Unsigned_64
-   function Address_To_U64 is new Ada.Unchecked_Conversion(
-      Source => System.Address,
-      Target => Unsigned_64);
-
-   -- Convert Unsigned_64 to System.Address
-   function U64_To_Address is new Ada.Unchecked_Conversion(
-      Source => Unsigned_64,
-      Target => System.Address);
-
-   -- Calculate the context offset for a given hart and context ID
-   function Context_Offset (
-      Hart_ID    : Unsigned_64;
-      Context_ID : Unsigned_64
-   ) return Unsigned_64 is
+   ----------------------------------------------------------------------------
+   --  Context Helpers
+   ----------------------------------------------------------------------------
+   function Supervisor_Context (Hart : Unsigned_64) return Context_Id is
    begin
-      Arch.Debug.Print(
-         "Context_Offset: Calculating context offset for Hart_ID=" &
-         Unsigned_64'Image(Hart_ID) & ", Context_ID=" & Unsigned_64'Image(Context_ID));
-      return PLIC_Context_Base_Offset +
-             (Hart_ID * PLIC_Context_Stride) +
-             (Context_ID * PLIC_Context_Stride);
-   end Context_Offset;
+      return Context_Id (Hart * 2 + 1);
+   end Supervisor_Context;
 
-   -- Calculate the PLIC register address for a given offset
-   function PLIC_Address (Offset : Unsigned_64) return System.Address is
+   function Machine_Context (Hart : Unsigned_64) return Context_Id is
    begin
-      Arch.Debug.Print("PLIC_Address: Calculating address with offset=" &
-                       Unsigned_64'Image(Offset));
-      return U64_To_Address(Address_To_U64(PLIC_Base_Address) + Offset);
-   end PLIC_Address;
+      return Context_Id (Hart * 2);
+   end Machine_Context;
 
-   -----------------------------------------------------------------------------
-   --  Initialize
-   -----------------------------------------------------------------------------
-   procedure Initialize (Hart_ID : Unsigned_64; Context_ID : Unsigned_64 := 0) is
-      Ctx_Base      : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
-      Threshold_Reg : access Unsigned_64 := To_Address(Ctx_Base + PLIC_Threshold_Offset);
+   ----------------------------------------------------------------------------
+   --  Is_Enabled: True if PLIC DTB node exists
+   ----------------------------------------------------------------------------
+   function Is_Enabled return Boolean is
+      Node : DTB_Node_Access := Find_Node_By_Compatible ("riscv,plic0");
    begin
-      Arch.Debug.Print("Initialize: Initializing PLIC for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID));
+      return Node /= null;
+   end Is_Enabled;
 
-      if not PLIC_Enabled then
-         Arch.Debug.Print("Initialize: PLIC is disabled. Exiting initialization.");
+   ----------------------------------------------------------------------------
+   --  Global configuration: map MMIO and detect version
+   ----------------------------------------------------------------------------
+   procedure Set_PLIC_Configuration is
+      Node    : DTB_Node_Access := Find_Node_By_Compatible ("riscv,plic0");
+      Regs    : Unsigned_64_Array;
+      Base    : Unsigned_64;
+      Size    : Unsigned_64;
+      Phys    : Address;
+      Virt    : Address;
+      Success : Boolean;
+      VerArr  : Unsigned_64_Array;
+   begin
+      Debug.Print ("Arch.PLIC: Configuring PLIC");
+      if Node = null then
+         Debug.Print ("Arch.PLIC: DTB node not found; disabled");
          return;
       end if;
 
-      -- Set the threshold register to 0
-      Threshold_Reg.all := 0;
+      Regs := Get_Property_Unsigned_64 (Node, "reg");
+      Base := Regs(1);
+      Size := Regs(2);
+      Phys := To_Address (Storage_Offset(Base));
+      Virt := Phys;
 
-      Arch.Debug.Print("Initialize: PLIC initialized successfully for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID));
+      Map_Range (
+        Map            => Kernel_Table,
+        Physical_Start => Phys,
+        Virtual_Start  => Virt,
+        Length         => Storage_Count(Size),
+        Permissions    => (Is_User_Accesible => False,
+                          Can_Read          => True,
+                          Can_Write         => False,
+                          Can_Execute       => False,
+                          Is_Global         => True),
+        Success        => Success
+      );
+      if not Success then
+         Debug.Print ("Arch.PLIC: MMIO map failed; disabled");
+         return;
+      end if;
+
+      Plic_Base     := Virt;
+      Plic_Base_Off := Storage_Offset(To_Integer(Virt));
+      Debug.Print ("Arch.PLIC: Mapped at " & Address'Image(Virt)
+                   & ", size " & Unsigned_64'Image(Size));
+
+      begin
+         Num_Sources := Unsigned_32 (
+           Get_Property_Unsigned_64(Node, "#interrupts")(1)
+         );
+      exception
+         when others =>
+            Debug.Print ("Arch.PLIC: '#interrupts' missing; default " &
+                         Unsigned_32'Image(Num_Sources));
+      end;
+
+      Num_Contexts := Core_Count * 2;
+
+      begin
+         VerArr := Get_Property_Unsigned_64(Node, "riscv,plic-version");
+         Plic_Version := Unsigned_32(VerArr(1));
+         Debug.Print ("Arch.PLIC: Version=" & Unsigned_32'Image(Plic_Version));
+      exception
+         when others =>
+            Debug.Print ("Arch.PLIC: Version unspecified; default v1");
+      end;
+
+      Debug.Print ("Arch.PLIC: Sources=" & Unsigned_32'Image(Num_Sources)
+                 & ", Contexts=" & Unsigned_64'Image(Num_Contexts));
+   end Set_PLIC_Configuration;
+
+   ----------------------------------------------------------------------------
+   --  Initialize: set threshold and enable IRQs for v1+
+   ----------------------------------------------------------------------------
+   procedure Initialize (Hart_Id : Unsigned_64; Ctx : Context_Id) is
+      Off : Storage_Offset :=
+         Plic_Base_Off + Threshold_Base
+         + Context_Stride * Storage_Offset(Integer(Ctx));
+      Reg : Unsigned_32 with Address => To_Address(Off);
+      Idx : Natural;
+   begin
+      Debug.Print ("Arch.PLIC: Init context " & Unsigned_64'Image(Ctx));
+      if Plic_Base = Null_Address then
+         Debug.Print ("Arch.PLIC: Not mapped; skip init");
+         return;
+      end if;
+
+      Reg := 0;
+
+      if Plic_Version >= 1 then
+         for Idx in 1 .. Natural(Num_Sources) loop
+            Enable_IRQ(Hart_Id, Ctx, IRQ_Id(Idx));
+         end loop;
+         Debug.Print ("Arch.PLIC: Enabled all IRQs for context " &
+                      Unsigned_64'Image(Ctx));
+      end if;
    end Initialize;
 
-   -----------------------------------------------------------------------------
-   --  Claim
-   -----------------------------------------------------------------------------
-   function Claim (Hart_ID : Unsigned_64; Context_ID : Unsigned_64 := 0) return Unsigned_64 is
-      Ctx_Base   : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
-      Claim_Reg  : access Unsigned_64 := To_Address(Ctx_Base + 4);
+   ----------------------------------------------------------------------------
+   --  Set_Priority: write priority register
+   ----------------------------------------------------------------------------
+   procedure Set_Priority (Id : IRQ_Id; Priority : Unsigned_32) is
+      Off : Storage_Offset :=
+         Plic_Base_Off + Priority_Base
+         + Storage_Offset(4 * Integer(Id));
+      Reg : Unsigned_32 with Address => To_Address(Off);
    begin
-      Arch.Debug.Print("Claim: Claiming interrupt for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID));
-      return Claim_Reg.all;
+      pragma Assert (Integer(Id) < Integer(Num_Sources));
+      Reg := Priority;
+      Debug.Print ("Arch.PLIC: Prio=" & Unsigned_32'Image(Priority)
+                   & " IRQ=" & Unsigned_64'Image(Id));
+   end Set_Priority;
+
+   ----------------------------------------------------------------------------
+   --  Enable_IRQ: unmask bit in enable register
+   ----------------------------------------------------------------------------
+   procedure Enable_IRQ (Hart_Id : Unsigned_64;
+                         Ctx     : Context_Id;
+                         Id      : IRQ_Id) is
+      Word : Integer := Integer(Id) / 32;
+      Bit  : Integer := Integer(Id) mod 32;
+      Off  : Storage_Offset :=
+         Plic_Base_Off + Enable_Base
+         + Context_Stride * Storage_Offset(Integer(Ctx))
+         + Storage_Offset(4 * Word);
+      Reg  : Unsigned_32 with Address => To_Address(Off);
+      Mask : Unsigned_32 := Interfaces.Shift_Left(Unsigned_32(1), Bit);
+   begin
+      pragma Assert (Integer(Id) < Integer(Num_Sources));
+      Reg := Reg or Mask;
+      Debug.Print ("Arch.PLIC: Enabled IRQ=" & Unsigned_64'Image(Id)
+                   & " Ctx=" & Unsigned_64'Image(Ctx));
+   end Enable_IRQ;
+
+   ----------------------------------------------------------------------------
+   --  Disable_IRQ: mask bit in enable register
+   ----------------------------------------------------------------------------
+   procedure Disable_IRQ (Hart_Id : Unsigned_64;
+                          Ctx     : Context_Id;
+                          Id      : IRQ_Id) is
+      Word : Integer := Integer(Id) / 32;
+      Bit  : Integer := Integer(Id) mod 32;
+      Off  : Storage_Offset :=
+         Plic_Base_Off + Enable_Base
+         + Context_Stride * Storage_Offset(Integer(Ctx))
+         + Storage_Offset(4 * Word);
+      Reg  : Unsigned_32 with Address => To<Address(Off);
+      Mask : Unsigned_32 := not Interfaces.Shift_Left(Unsigned_32(1), Bit);
+   begin
+      pragma Assert (Integer(Id) < Integer(Num_Sources));
+      Reg := Reg and Mask;
+      Debug.Print ("Arch.PLIC: Disabled IRQ=" & Unsigned_64'Image(Id)
+                   & " Ctx=" & Unsigned_64'Image(Ctx));
+   end Disable_IRQ;
+
+   ----------------------------------------------------------------------------
+   --  Claim: read claim register
+   ----------------------------------------------------------------------------
+   function Claim (Hart_Id : Unsigned_64;
+                   Ctx     : Context_Id) return IRQ_Id is
+      Off : Storage_Offset :=
+         Plic_Base_Off + Claim_Base
+         + Context_Stride * Storage_Offset(Integer(Ctx));
+      Reg : Unsigned_32 with Address => To<Address(Off);
+      Id  : Unsigned_32;
+   begin
+      if Plic_Base = Null_Address then
+         return IRQ_Id(0);
+      end if;
+      Id := Reg;
+      if Id = 0 then
+         return IRQ_Id(0);
+      end if;
+      Debug.Print ("Arch.PLIC: Claimed IRQ=" & Unsigned_32'Image(Id));
+      return IRQ_Id(Id);
    end Claim;
 
-   -----------------------------------------------------------------------------
-   --  Complete
-   -----------------------------------------------------------------------------
-   procedure Complete (
-      Hart_ID      : Unsigned_64;
-      Context_ID   : Unsigned_64 := 0;
-      Interrupt_ID : Unsigned_64
-   ) is
-      Ctx_Base     : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
-      Complete_Reg : access Unsigned_64 := To_Address(Ctx_Base + 4);
+   ----------------------------------------------------------------------------
+   --  Complete: write complete register
+   ----------------------------------------------------------------------------
+   procedure Complete (Hart_Id : Unsigned_64;
+                       Ctx     : Context_Id;
+                       IRQ     : IRQ_Id) is
+      Off : Storage_Offset :=
+         Plic_Base_Off + Claim_Base
+         + Context_Stride * Storage_Offset(Integer(Ctx));
+      Reg : Unsigned_32 with Address => To<Address(Off);
    begin
-      Arch.Debug.Print("Complete: Completing interrupt for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID) & ", Interrupt_ID=" &
-                       Unsigned_64'Image(Interrupt_ID));
-      Complete_Reg.all := Interrupt_ID;
+      if Plic_Base = Null_Address or else IRQ = 0 then
+         return;
+      end if;
+      Reg := Unsigned_32(IRQ);
+      Debug.Print ("Arch.PLIC: Completed IRQ=" & Unsigned_64'Image(IRQ));
    end Complete;
-
-   -----------------------------------------------------------------------------
-   --  Set_Interrupt_Priority
-   -----------------------------------------------------------------------------
-   procedure Set_Interrupt_Priority (Interrupt_ID : Unsigned_64; Priority : Unsigned_64) is
-      Priority_Reg : access Unsigned_64 := To_Address(PLIC_Priority_Offset + (Interrupt_ID * 4));
-   begin
-      Arch.Debug.Print("Set_Interrupt_Priority: Setting priority for Interrupt_ID=" &
-                       Unsigned_64'Image(Interrupt_ID) & " to " &
-                       Unsigned_64'Image(Priority));
-      Priority_Reg.all := Priority;
-   end Set_Interrupt_Priority;
-
-   -----------------------------------------------------------------------------
-   --  Get_Interrupt_Priority
-   -----------------------------------------------------------------------------
-   function Get_Interrupt_Priority (Interrupt_ID : Unsigned_64) return Unsigned_64 is
-      Priority_Reg : access Unsigned_64 := To_Address(PLIC_Priority_Offset + (Interrupt_ID * 4));
-   begin
-      Arch.Debug.Print("Get_Interrupt_Priority: Getting priority for Interrupt_ID=" &
-                       Unsigned_64'Image(Interrupt_ID));
-      return Priority_Reg.all;
-   end Get_Interrupt_Priority;
-
-   -----------------------------------------------------------------------------
-   --  Set_Threshold
-   -----------------------------------------------------------------------------
-   procedure Set_Threshold (Hart_ID : Unsigned_64; Context_ID : Unsigned_64 := 0; Threshold : Unsigned_64) is
-      Ctx_Base      : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
-      Threshold_Reg : access Unsigned_64 := To_Address(Ctx_Base + PLIC_Threshold_Offset);
-   begin
-      Arch.Debug.Print("Set_Threshold: Setting threshold for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID) & " to " &
-                       Unsigned_64'Image(Threshold));
-      Threshold_Reg.all := Threshold;
-   end Set_Threshold;
-
-   -----------------------------------------------------------------------------
-   --  Get_Threshold
-   -----------------------------------------------------------------------------
-   function Get_Threshold (Hart_ID : Unsigned_64; Context_ID : Unsigned_64 := 0) return Unsigned_64 is
-      Ctx_Base      : constant Unsigned_64 := Context_Offset(Hart_ID, Context_ID);
-      Threshold_Reg : access Unsigned_64 := To_Address(Ctx_Base + PLIC_Threshold_Offset);
-   begin
-      Arch.Debug.Print("Get_Threshold: Getting threshold for Hart_ID=" &
-                       Unsigned_64'Image(Hart_ID) & ", Context_ID=" &
-                       Unsigned_64'Image(Context_ID));
-      return Threshold_Reg.all;
-   end Get_Threshold;
-
-   -----------------------------------------------------------------------------
-   --  Reset_All
-   -----------------------------------------------------------------------------
-   procedure Reset_All is
-   begin
-      Arch.Debug.Print("Reset_All: Resetting all PLIC configurations");
-
-      -- Reset all priorities
-      for Interrupt_ID in 0 .. PLIC_Max_Interrupt_ID loop
-         Set_Interrupt_Priority(Interrupt_ID, 0);
-      end loop;
-
-      -- Reset all thresholds
-      for Hart_ID in 0 .. PLIC_Max_Harts - 1 loop
-         for Context_ID in 0 .. PLIC_Contexts_Per_Hart - 1 loop
-            Set_Threshold(Hart_ID, Context_ID, 0);
-         end loop;
-      end loop;
-
-      Arch.Debug.Print("Reset_All: All PLIC configurations reset successfully");
-   end Reset_All;
-
-   -----------------------------------------------------------------------------
-   --  Hot_Reconfigure
-   -----------------------------------------------------------------------------
-   procedure Hot_Reconfigure is
-   begin
-      Arch.Debug.Print("Hot_Reconfigure: Starting hot reconfiguration of PLIC");
-
-      -- Example: Reconfigure priorities and thresholds dynamically
-      for Interrupt_ID in 0 .. PLIC_Max_Interrupt_ID loop
-         Set_Interrupt_Priority(Interrupt_ID, Interrupt_ID mod 8); -- Example priority logic
-      end loop;
-
-      for Hart_ID in 0 .. PLIC_Max_Harts - 1 loop
-         for Context_ID in 0 .. PLIC_Contexts_Per_Hart - 1 loop
-            Set_Threshold(Hart_ID, Context_ID, 4); -- Example threshold logic
-         end loop;
-      end loop;
-
-      Arch.Debug.Print("Hot_Reconfigure: Hot reconfiguration completed successfully");
-   end Hot_Reconfigure;
 
 end Arch.PLIC;

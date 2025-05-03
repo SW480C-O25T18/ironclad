@@ -14,54 +14,77 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with System; use System;
-with Interfaces; use Interfaces;
+with Interfaces;                use Interfaces;
+with System;                    use System;
+with System.Storage_Elements;   use System.Storage_Elements;
+with Arch.SBI;                  use Arch.SBI;
+with Arch.MMU;                  use Arch.MMU;
+with Arch.DTB;                  use Arch.DTB;
 
-package Arch.CLINT is
+package Arch.CLINT with SPARK_Mode => Off is
 
-   type CLINT_State_Type is record
-      Base_Address    : System.Address;
-      MSIP_Offset     : Unsigned_64;
-      MTime_Offset    : Unsigned_64;
-      MTimecmp_Offset : Unsigned_64;
-      Enabled         : Boolean;
-   end record;
+   ------------------------------------------------------------------------
+   --  Global Variables
+   ------------------------------------------------------------------------
+   Clint_Base     : Address        := Null_Address;
+     --  Virtual base address of CLINT MMIO (fallback).
 
-   CLINT_State : CLINT_State_Type;
+   Clint_Base_Off : Storage_Offset := 0;
+     --  Cached integer offset of Clint_Base for MMIO arithmetic.
 
-   --  Set CLINT configuration dynamically.
-   procedure Set_CLINT_Configuration
-     (Base_Address     : System.Address := System'To_Address(16#02000000#);
-      MSIP_Offset      : Unsigned_64    := 0;
-      MTime_Offset     : Unsigned_64    := 16#BFF8#;
-      MTimecmp_Offset  : Unsigned_64    := 16#4000#;
-      Enabled          : Boolean        := True);
+   ------------------------------------------------------------------------
+   --  CLINT register offsets
+   ------------------------------------------------------------------------
+   MSIP_Base      : constant Storage_Offset := Storage_Offset (16#0000#);
+     --  Software interrupt register base.
+   MTIMECMP_Base  : constant Storage_Offset := Storage_Offset (16#4000#);
+     --  Timer compare register base.
+   MTIMECMP_Step  : constant Storage_Offset := Storage_Offset (8);
+     --  Stride between MTIMECMP entries per hart.
 
-   --  Getters for CLINT configuration.
-   function Get_CLINT_Base return System.Address;
-   function Get_MSIP_Offset return Unsigned_64;
-   function Get_MTime_Offset return Unsigned_64;
-   function Get_MTimecmp_Offset return Unsigned_64;
+   ------------------------------------------------------------------------
+   --  CLINT availability
+   ------------------------------------------------------------------------
    function CLINT_Enabled return Boolean;
+     --  True if SBI timer extension available or MMIO base is set.
 
-   --  Software interrupt management.
-   procedure Set_Software_Interrupt (Hart_ID : Unsigned_64; Value : Boolean);
-   procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64);
-   function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean;
+   ------------------------------------------------------------------------
+   --  Global configuration
+   ------------------------------------------------------------------------
+   procedure Set_CLINT_Configuration;
+     --  Initialize CLINT: prefer SBI extensions, fallback to MMIO mapping.
 
-   --  Timer management.
-   function Get_MTime return Unsigned_64;
-   procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64);
-   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64;
+   ------------------------------------------------------------------------
+   --  Hart-specific initialization
+   ------------------------------------------------------------------------
+   procedure Initialize_Hart (Hart_Id : Unsigned_64);
+     --  Clear software interrupt (MSIP) for the given hart.
 
-   --  Memory barrier.
-   procedure Memory_Barrier;
+   ------------------------------------------------------------------------
+   --  Software IPIs
+   ------------------------------------------------------------------------
+   procedure Send_Software_Interrupt (Target_Hart : Unsigned_64);
+     --  Trigger software interrupt to Target_Hart.
 
-   --  Read and write operations.
-   type Reg_Type is new Unsigned_64;
-   pragma Volatile (Reg_Type);
-   type Reg_Ptr is access all Reg_Type;
+   procedure Clear_Software_Interrupt (Hart_Id : Unsigned_64);
+     --  Clear software interrupt for Hart_Id.
 
-   function Reg (Addr : System.Address) return Reg_Ptr;
+   procedure Send_Fence_Ipi (Target_Hart : Unsigned_64);
+     --  Send a remote fence-IPI, or fallback to software IPI.
+
+   ------------------------------------------------------------------------
+   --  Timer interrupts
+   ------------------------------------------------------------------------
+   procedure Set_Timer (Next_Time : Unsigned_64);
+     --  Set the next timer interrupt (SBI or MMIO MTIMECMP).
+
+   procedure Clear_Timer_Interrupt (Hart_Id : Unsigned_64);
+     --  No-op on RISC-V for clearing timer interrupt.
+
+   procedure Disable_Timer_Interrupt;
+     --  Mask supervisor timer interrupts (clear STIE).
+
+   procedure Enable_Timer_Interrupt;
+     --  Unmask supervisor timer interrupts (set STIE).
 
 end Arch.CLINT;
