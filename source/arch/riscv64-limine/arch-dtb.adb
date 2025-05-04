@@ -21,12 +21,10 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces; use Interfaces;
-with System; use System;
-with System.Storage_Elements; use System.Storage_Elements;
-with Ada.Unchecked_Conversion;
-with Arch.Limine;
-with Arch.Debug;
+with System;                     use System;
+with System.Storage_Elements;    use System.Storage_Elements;
+with Ada.Unchecked_Conversion;   use Ada.Unchecked_Conversion;
+with Arch.Debug;                 use Arch.Debug;
 
 package body Arch.DTB with SPARK_Mode => Off is
 
@@ -48,10 +46,10 @@ package body Arch.DTB with SPARK_Mode => Off is
    -- Access Types for Pointer Conversions
    -----------------------------------------------------------------------------
    type U32_Ptr is access all Unsigned_32;
-   function To_U32_Ptr is new Ada.Unchecked_Conversion(Address, U32_Ptr);
+   function To_U32_Ptr is new Ada.Unchecked_Conversion (Address, U32_Ptr);
 
    type U8_Ptr is access all Unsigned_8;
-   function To_U8_Ptr is new Ada.Unchecked_Conversion(Address, U8_Ptr);
+   function To_U8_Ptr is new Ada.Unchecked_Conversion (Address, U8_Ptr);
 
    -----------------------------------------------------------------------------
    -- Base Addresses (Set in Init)
@@ -64,7 +62,7 @@ package body Arch.DTB with SPARK_Mode => Off is
    -- Helper Functions
    -----------------------------------------------------------------------------
 
-   function Contains_Substring(Haystack : String; Needle : String) return Boolean is
+   function Contains_Substring (Haystack : String; Needle : String) return Boolean is
       Haystack_Len : constant Natural := Haystack'Length;
       Needle_Len   : constant Natural := Needle'Length;
    begin
@@ -73,7 +71,7 @@ package body Arch.DTB with SPARK_Mode => Off is
       end if;
 
       for I in Haystack'First .. Haystack'Last - Needle_Len + 1 loop
-         if Haystack(I .. I + Needle_Len - 1) = Needle then
+         if Haystack (I .. I + Needle_Len - 1) = Needle then
             return True;
          end if;
       end loop;
@@ -82,7 +80,7 @@ package body Arch.DTB with SPARK_Mode => Off is
    end Contains_Substring;
 
    -- Convert 32-bit big-endian to host order
-   function BE_To_Host(Val : Unsigned_32) return Unsigned_32 is
+   function BE_To_Host (Val : Unsigned_32) return Unsigned_32 is
       B0, B1, B2, B3 : Unsigned_32;
    begin
       B0 := (Val and 16#FF000000#) / 16#1000000#;
@@ -93,126 +91,133 @@ package body Arch.DTB with SPARK_Mode => Off is
    end BE_To_Host;
 
    -- Read a 32-bit BE value from memory
-   function Read_BE32(Addr : Address) return Unsigned_32 is
-      Ptr : U32_Ptr := To_U32_Ptr(Addr);
+   function Read_BE32 (Addr : Address) return Unsigned_32 is
+      Ptr : U32_Ptr := To_U32_Ptr (Addr);
    begin
-      return BE_To_Host(Ptr.all);
+      return BE_To_Host (Ptr.all);
    end Read_BE32;
 
    -- Align address to 4-byte boundary
-   function Align4(Addr : Address) return Address is
-      Offset : constant Integer := Integer(Addr mod 4);
+   function Align4 (Addr : Address) return Address is
+      Offset : constant Integer := Integer (Addr mod 4);
    begin
       if Offset = 0 then
          return Addr;
       else
-         return Addr + To_Address(4 - Offset);
+         return Addr + To_Address (4 - Offset);
       end if;
    end Align4;
 
    -- Advance pointer by N bytes
-   function Advance(Addr : Address; Bytes : Natural) return Address is
+   function Advance (Addr : Address; Bytes : Natural) return Address is
    begin
-      return Addr + To_Address(Bytes);
+      return Addr + To_Address (Bytes);
    end Advance;
 
    -- Read a null-terminated ASCII string (up to Max_Name_Length)
-   function Read_Null_String(Addr : Address) return String is
-      Ptr    : U8_Ptr := To_U8_Ptr(Addr);
+   function Read_Null_String (Addr : Address) return String is
+      Ptr    : U8_Ptr := To_U8_Ptr (Addr);
       Len    : Natural := 0;
-      Result : String(1 .. Max_Name_Length);
+      Result : String (1 .. Max_Name_Length);
    begin
       loop
-         if Ptr(Len) = 0 then
+         if Ptr (Len) = 0 then
             exit;
          end if;
-         Result(Len + 1) := Character'Val(Integer(Ptr(Len)));
+         Result (Len + 1) := Character'Val (Integer (Ptr (Len)));
          Len := Len + 1;
          if Len = Max_Name_Length then
             exit;
          end if;
       end loop;
-      return Result(1 .. Len);
+      return Result (1 .. Len);
    exception
       when others =>
-         Arch.Debug.Print("Read_Null_String: Exception occurred while reading string.");
+         Arch.Debug.Print ("Read_Null_String: Exception occurred while reading string.");
          return "";
    end Read_Null_String;
 
    -----------------------------------------------------------------------------
    -- Recursive Parse of a DTB Node
    -----------------------------------------------------------------------------
-   function Parse_Node(Pos : in out Address) return DTB_Node_Access is
+   function Parse_Node (Pos : in out Address) return DTB_Node_Access is
       Token : Unsigned_32;
-      Node  : DTB_Node_Access := new DTB_Node'(Name => (others => ' '), Prop_Count => 0, Child_Count => 0);
+      Node  : DTB_Node_Access := new DTB_Node' (Name => (others => ' '), Prop_Count => 0, Child_Count => 0);
    begin
       -- Read BEGIN_NODE token
-      Token := Read_BE32(Pos);
+      Token := Read_BE32 (Pos);
       if Token /= FDT_BEGIN_NODE then
-         raise Program_Error with "Expected FDT_BEGIN_NODE token";
+         Debug.Print ("Expected FDT_BEGIN_NODE token");
+         return null;
       end if;
-      Pos := Advance(Pos, 4);
+      Pos := Advance (Pos, 4);
 
       -- Parse node name
-      Node.Name := Read_Null_String(Pos);
-      Arch.Debug.Print("Parse_Node: Found node '" & Node.Name & "'");
-      Pos := Align4(Advance(Pos, Node.Name'Length + 1));
+      Node.Name := Read_Null_String (Pos);
+      Arch.Debug.Print ("Parse_Node: Found node '" & Node.Name & "'");
+      Pos := Align4 (Advance (Pos, Node.Name'Length + 1));
 
       -- Parse properties and children
       loop
-         Token := Read_BE32(Pos);
-         Pos := Advance(Pos, 4);
+         Token := Read_BE32 (Pos);
+         Pos := Advance (Pos, 4);
 
          case Token is
             when FDT_PROP =>
-               Parse_Property(Node, Pos);
+               Parse_Property (Node, Pos);
             when FDT_BEGIN_NODE =>
-               Node.Children(Node.Child_Count + 1) := Parse_Node(Pos);
+               Node.Children (Node.Child_Count + 1) := Parse_Node (Pos);
                Node.Child_Count := Node.Child_Count + 1;
             when FDT_END_NODE =>
                exit;
             when FDT_NOP =>
                null; -- Skip padding
             when others =>
-               raise Program_Error with "Unexpected token in DTB structure";
+               Debug.Print ("Unexpected token in DTB structure");
+               return null;
          end case;
       end loop;
 
       return Node;
    exception
       when others =>
-         Arch.Debug.Print("Parse_Node: Exception occurred while parsing node.");
+         Arch.Debug.Print ("Parse_Node: Exception occurred while parsing node.");
          return null;
    end Parse_Node;
 
    -----------------------------------------------------------------------------
    -- Parse a Property
    -----------------------------------------------------------------------------
-   procedure Parse_Property(Node : DTB_Node_Access; Pos : in out Address) is
+   procedure Parse_Property (Node : DTB_Node_Access; Pos : in out Address) is
       Prop : DTB_Property_Access := new DTB_Property;
    begin
       -- Parse property length and name offset
-      Prop.Len := BE_To_Host(Read_BE32(Pos));
-      Pos := Advance(Pos, 4);
-      Prop.Name := Read_Null_String(Strings_Base + BE_To_Host(Read_BE32(Pos)));
-      Pos := Advance(Pos, 4);
+      Prop.Len := BE_To_Host (Read_BE32 (Pos));
+      Pos := Advance (Pos, 4);
+      Prop.Name := Read_Null_String (
+         To_Address (
+            Integer_Address (Strings_Base) +
+            Integer (BE_To_Host (Read_BE32 (Pos)))
+        )
+     );
+      Pos := Advance (Pos, 4);
 
       -- Parse property value
       for I in 1 .. Prop.Len loop
-         Prop.Value(I) := Unsigned_64(Read_BE32(Pos));
-         Pos := Advance(Pos, 4);
+         Prop.Value (I) := Unsigned_64 (Read_BE32 (Pos));
+         Pos := Advance (Pos, 4);
       end loop;
 
       -- Add property to node
-      Node.Properties(Node.Prop_Count + 1) := Prop;
+      Node.Properties (Node.Prop_Count + 1) := Prop;
       Node.Prop_Count := Node.Prop_Count + 1;
 
       -- Debugging
-      Arch.Debug.Print("Parse_Property: Parsed property '" & Prop.Name &
-         "' with length " & Natural'Image(Prop.Len));
+      Arch.Debug.Print ("Parse_Property: Parsed property '" & Prop.Name &
+         "' with length " & Natural'Image (Prop.Len));
    exception
       when others =>
-         Arch.Debug.Print("Parse_Property: Exception occurred while parsing property.");
+         Arch.Debug.Print ("Parse_Property: Exception occurred while parsing property.");
    end Parse_Property;
 
    -----------------------------------------------------------------------------
@@ -220,37 +225,49 @@ package body Arch.DTB with SPARK_Mode => Off is
    -----------------------------------------------------------------------------
    function Init return Boolean is
       type HDR_Ptr is access all FDT_Header;
-      function To_HDR_Ptr is new Ada.Unchecked_Conversion(Address, HDR_Ptr);
-      HDR : HDR_Ptr := To_HDR_Ptr(Arch.Limine.DTB_Response.DTB_Addr);
+      function To_HDR_Ptr is new Ada.Unchecked_Conversion (Address, HDR_Ptr);
+      HDR : HDR_Ptr := To_HDR_Ptr (Limine.DTB_Response.DTB_Addr);
    begin
-      if Arch.Limine.DTB_Response.DTB_Addr = System.Null_Address then
-         Arch.Debug.Print("Init: DTB address is null. Cannot initialize DTB.");
+      if Limine.DTB_Response.DTB_Addr = System.Null_Address then
+         Arch.Debug.Print ("Init: DTB address is null. Cannot initialize DTB.");
          return False;
       end if;
 
       if HDR = null then
-         Arch.Debug.Print("Init: No DTB response.");
+         Arch.Debug.Print ("Init: No DTB response.");
          return False;
       end if;
 
-      if BE_To_Host(HDR.Magic) /= FDT_MAGIC then
-         Arch.Debug.Print("Init: Invalid magic: " & Unsigned_32'Image(HDR.Magic));
+      if BE_To_Host (HDR.Magic) /= FDT_MAGIC then
+         Arch.Debug.Print ("Init: Invalid magic: " & Unsigned_32'Image (HDR.Magic));
          return False;
       end if;
 
-      Struct_Base  := Arch.Limine.DTB_Response.DTB_Addr + To_Address(Natural(BE_To_Host(HDR.Offset_DT_Struct)));
-      Strings_Base := Arch.Limine.DTB_Response.DTB_Addr + To_Address(Natural(BE_To_Host(HDR.Offset_DT_Strings)));
-      DTB_End      := Arch.Limine.DTB_Response.DTB_Addr + To_Address(Natural(BE_To_Host(HDR.Size)));
+      Struct_Base  :=
+         Limine.DTB_Response.DTB_Addr +
+         To_Address (
+            Integer_Address (
+               BE_To_Host (HDR.Offset_DT_Struct)));
+      Strings_Base :=
+         Limine.DTB_Response.DTB_Addr +
+         To_Address (
+            Integer_Address (Natural (
+               BE_To_Host (HDR.Offset_DT_Strings))));
+      DTB_End      :=
+         Limine.DTB_Response.DTB_Addr +
+            To_Address (
+               Integer_Address (
+                  Natural (BE_To_Host (HDR.Size))));
 
-      Arch.Debug.Print("Init: Struct_Base = " & Address'Image(Struct_Base));
-      Arch.Debug.Print("Init: Strings_Base = " & Address'Image(Strings_Base));
-      Arch.Debug.Print("Init: DTB_End = " & Address'Image(DTB_End));
+      Arch.Debug.Print ("Init: Struct_Base = " & Address'Image (Struct_Base));
+      Arch.Debug.Print ("Init: Strings_Base = " & Address'Image (Strings_Base));
+      Arch.Debug.Print ("Init: DTB_End = " & Address'Image (DTB_End));
 
       Parse_DTB;
       return True;
    exception
       when others =>
-         Arch.Debug.Print("Init: Exception occurred during initialization.");
+         Arch.Debug.Print ("Init: Exception occurred during initialization.");
          return False;
    end Init;
 
@@ -260,34 +277,34 @@ package body Arch.DTB with SPARK_Mode => Off is
    procedure Parse_DTB is
       Pos : Address := Struct_Base;
    begin
-      Arch.Debug.Print("Parse_DTB: Starting DTB parsing...");
-      Root_Node := Parse_Node(Pos);
-      Arch.Debug.Print("Parse_DTB: Parsing complete.");
+      Arch.Debug.Print ("Parse_DTB: Starting DTB parsing...");
+      Root_Node := Parse_Node (Pos);
+      Arch.Debug.Print ("Parse_DTB: Parsing complete.");
    exception
       when others =>
-         Arch.Debug.Print("Parse_DTB: Exception occurred during parsing.");
+         Arch.Debug.Print ("Parse_DTB: Exception occurred during parsing.");
    end Parse_DTB;
 
    -----------------------------------------------------------------------------
    -- Pretty-Print a Node
    -----------------------------------------------------------------------------
-   procedure Print_DTB_Node(Node : DTB_Node_Access; Indent : String := "") is
+   procedure Print_DTB_Node (Node : DTB_Node_Access; Indent : String := "") is
    begin
-      Arch.Debug.Print(Indent & "Node: " & Node.Name);
+      Arch.Debug.Print (Indent & "Node: " & Node.Name);
       for I in 1 .. Node.Prop_Count loop
          declare
-            Prop : constant DTB_Property_Access := Node.Properties(I);
+            Prop : constant DTB_Property_Access := Node.Properties (I);
          begin
-            Arch.Debug.Print(Indent & "  Property: " & Prop.Name &
-               " (Length: " & Natural'Image(Prop.Len) & ")");
+            Arch.Debug.Print (Indent & "  Property: " & Prop.Name &
+               " (Length: " & Natural'Image (Prop.Len) & ")");
          end;
       end loop;
       for I in 1 .. Node.Child_Count loop
-         Print_DTB_Node(Node.Children(I), Indent & "  ");
+         Print_DTB_Node (Node.Children (I), Indent & "  ");
       end loop;
    exception
       when others =>
-         Arch.Debug.Print("Print_DTB_Node: Exception occurred while printing node.");
+         Arch.Debug.Print ("Print_DTB_Node: Exception occurred while printing node.");
    end Print_DTB_Node;
 
    -----------------------------------------------------------------------------
@@ -296,30 +313,30 @@ package body Arch.DTB with SPARK_Mode => Off is
    procedure Print_DTB is
    begin
       if Root_Node /= null then
-         Print_DTB_Node(Root_Node);
+         Print_DTB_Node (Root_Node);
       else
-         Arch.Debug.Print("Print_DTB: No root node found.");
+         Arch.Debug.Print ("Print_DTB: No root node found.");
       end if;
    exception
       when others =>
-         Arch.Debug.Print("Print_DTB: Exception occurred while printing DTB.");
+         Arch.Debug.Print ("Print_DTB: Exception occurred while printing DTB.");
    end Print_DTB;
 
    -----------------------------------------------------------------------------
    -- Find Node by Compatible String
    -----------------------------------------------------------------------------
-   function Find_Node_By_Compatible(Compat : String) return DTB_Node_Access is
-      function Search(N : DTB_Node_Access) return DTB_Node_Access is
+   function Find_Node_By_Compatible (Compat : String) return DTB_Node_Access is
+      function Search (N : DTB_Node_Access) return DTB_Node_Access is
       begin
          for I in 1 .. N.Prop_Count loop
-            if N.Properties(I).Name = "compatible" and then
-               Contains_Substring(N.Properties(I).Value, Compat) then
+            if N.Properties (I).Name = "compatible" and then
+               Contains_Substring (String (N.Properties (I).Value), Compat) then
                return N;
             end if;
          end loop;
          for J in 1 .. N.Child_Count loop
             declare
-               C : DTB_Node_Access := Search(N.Children(J));
+               C : DTB_Node_Access := Search (N.Children (J));
             begin
                if C /= null then
                   return C;
@@ -332,11 +349,11 @@ package body Arch.DTB with SPARK_Mode => Off is
       if Root_Node = null then
          return null;
       else
-         return Search(Root_Node);
+         return Search (Root_Node);
       end if;
    exception
       when others =>
-         Arch.Debug.Print("Find_Node_By_Compatible: Exception occurred.");
+         Arch.Debug.Print ("Find_Node_By_Compatible: Exception occurred.");
          return null;
    end Find_Node_By_Compatible;
 
@@ -348,64 +365,90 @@ package body Arch.DTB with SPARK_Mode => Off is
       Name  : String;
       Index : Positive) return Unsigned_64
    is
-      Prop : DTB_Property_Access;
+      Prop : DTB_Property_Access := null;
    begin
+      -- Precondition: Ensure Node is not null
+      if Node = null then
+         Arch.Debug.Print ("Get_Property_Unsigned_64: Node is null.");
+         return 0; -- Return a default value
+      end if;
+
       -- Find the property by name
-      for I in 0 .. Node.Prop_Count - 1 loop
+      for I in Node.Properties'Range loop
          if Node.Properties (I).Name = Name then
             Prop := Node.Properties (I);
             exit;
          end if;
       end loop;
 
+      -- Handle missing property
       if Prop = null then
-         raise Program_Error with "Property '" & Name & "' not found in node.";
+         Arch.Debug.Print ("Get_Property_Unsigned_64: Property '" &
+         Name & "' not found in node.");
+         return 0; -- Return a default value
       end if;
 
       -- Ensure the index is within bounds
       if Index > Prop.Len then
-         raise Constraint_Error with "Index out of bounds for property '" & Name & "'.";
+         Arch.Debug.Print (
+            "Get_Property_Unsigned_64: Index " & Positive'Image (Index) &
+            " out of bounds for property '" &
+            Name & "' (Length: " & Natural'Image (Prop.Len) & ").");
+         return 0; -- Return a default value
       end if;
 
       -- Return the indexed value
       return Prop.Value (Index);
+
    exception
       when others =>
-         Arch.Debug.Print ("Get_Property_Unsigned_64: Failed to fetch property '" & Name & "'");
-         raise;
+         Arch.Debug.Print (
+            "Get_Property_Unsigned_64: " &
+            "Exception occurred while fetching property '" & Name & "'.");
+         return 0; -- Return a default value
    end Get_Property_Unsigned_64;
 
    function Get_Property_Unsigned_64
      (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array
    is
       Prop : DTB_Property_Access := null;
-      Result : Unsigned_64_Array (1 .. 0); -- Default to an empty array
    begin
+      -- Precondition: Ensure Node is not null
+      if Node = null then
+         Debug.Print ("Get_Property_Unsigned_64: Node is null.");
+         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
+      end if;
+
       -- Find the property by name
       for I in 1 .. Node.Prop_Count loop
-         if Node.Properties(I).Name = Name then
-            Prop := Node.Properties(I);
-            exit;
+         if Node.Properties (I).Name = Name then
+            Prop := Node.Properties (I);
+            exit when Prop /= null;
          end if;
       end loop;
 
+      -- Handle missing property
       if Prop = null then
-         raise Program_Error with "Property '" & Name & "' not found in node.";
+         Debug.Print ("Get_Property_Unsigned_64: Property '" &
+         Name & "' not found in node.");
+         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
       end if;
 
-      -- Allocate the result array based on the property length
-      Result := new Unsigned_64_Array(1 .. Prop.Len);
+      -- Allocate and populate the result array
+      declare
+         Result : Unsigned_64_Array (1 .. Natural (Prop.Len)) := (others => 0);
+      begin
+         for I in 1 .. Prop.Len loop
+            Result (I) := Prop.Value (I);
+         end loop;
+         return Result;
+      end;
 
-      -- Populate the result array
-      for I in 1 .. Prop.Len loop
-         Result(I) := Prop.Value(I);
-      end loop;
-
-      return Result;
    exception
       when others =>
-         Arch.Debug.Print("Get_Property_Unsigned_64: Failed to fetch property '" & Name & "'");
-         raise;
+         Debug.Print ("Get_Property_Unsigned_64: " &
+         "Exception occurred while fetching property '" & Name & "'.");
+         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
    end Get_Property_Unsigned_64;
 
 end Arch.DTB;

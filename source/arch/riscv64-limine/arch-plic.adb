@@ -35,7 +35,8 @@ package body Arch.PLIC with SPARK_Mode => Off is
    function Reg_Addr (Off : Storage_Offset) return Address is
    begin
       return To_Address (
-         Integer_Address (Integer (Plic_Base_Off)) + Integer (Off));
+         Integer_Address (Integer (Plic_Base_Off)) +
+         Integer_Address (Integer (Off)));
    exception
       when others =>
          Debug.Print ("Arch.PLIC: Unknown error in Reg_Addr");
@@ -72,7 +73,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
       -- Parse 'reg' property
       Base := Get_Property_Unsigned_64 (Node, "reg", 1);
       Size := Get_Property_Unsigned_64 (Node, "reg", 2);
-      Phys := To_Address (Storage_Offset (Base));
+      Phys := To_Address (Integer_Address (Storage_Offset (Base)));
       Virt := Phys;
 
       -- Map region
@@ -82,7 +83,10 @@ package body Arch.PLIC with SPARK_Mode => Off is
         Virtual_Start  => Virt,
         Length         => Storage_Count (Size),
         Permissions    => (Is_User_Accesible => False,
-                          Is_Global         => True),
+                          Is_Global         => True,
+                          Can_Read          => True,
+                          Can_Write         => True,
+                          Can_Execute       => False),
         Success        => Success
       );
       if not Success then
@@ -129,7 +133,8 @@ package body Arch.PLIC with SPARK_Mode => Off is
          + Context_Stride * Storage_Offset (Integer (Ctx));
       Reg : Unsigned_32 with Address => Reg_Addr (Off);
    begin
-      Debug.Print ("Arch.PLIC: Init context " & Unsigned_64'Image (Ctx));
+      Debug.Print ("Arch.PLIC: Init context " &
+         Unsigned_32'Image (Unsigned_32 (Ctx)));
       if Plic_Base = Null_Address then
          Debug.Print ("Arch.PLIC: Not mapped; skip init");
          return;
@@ -138,7 +143,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
       -- Set threshold to 0
       Reg := 0;
       Debug.Print ("Arch.PLIC: Threshold=0 for context "
-                   & Unsigned_64'Image (Ctx));
+                  & Unsigned_32'Image (Unsigned_32 (Ctx)));
 
       -- Enable all sources if v1+
       if Plic_Version >= 1 then
@@ -146,7 +151,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
             Enable_IRQ (Hart_Id, Ctx, IRQ_Id (Idx));
          end loop;
          Debug.Print ("Arch.PLIC: Enabled all IRQs for context "
-                      & Unsigned_64'Image (Ctx));
+                  & nsigned_32'Image (Unsigned_32 (Ctx)));
       end if;
    exception
       when others =>
@@ -166,7 +171,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
       Reg := Threshold;
       Debug.Print (
          "Arch.PLIC: Set threshold=" & Unsigned_32'Image (Threshold)
-                   & " for context " & Unsigned_64'Image (Ctx));
+                   & " for context " & Unsigned_32'Image (Unsigned_32 (Ctx)));
    exception
       when others =>
          Debug.Print ("Arch.PLIC: Unknown error in Set_Threshold");
@@ -184,7 +189,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
    begin
       Reg := Priority;
       Debug.Print ("Arch.PLIC: Priority=" & Unsigned_32'Image (Priority)
-                   & " for IRQ=" & Unsigned_64'Image (Id));
+                   & " for IRQ=" & Unsigned_64'Image (Unsigned_64 (Id)));
    exception
       when others =>
          Debug.Print ("Arch.PLIC: Unknown error in Set_Priority");

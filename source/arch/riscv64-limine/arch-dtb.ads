@@ -20,8 +20,8 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces; use Interfaces;
-with Arch.Limine;
+with Interfaces;  use Interfaces;
+with Arch.Limine; use Arch.Limine;
 
 package Arch.DTB with SPARK_Mode => Off is
 
