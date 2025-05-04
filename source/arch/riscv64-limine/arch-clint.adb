@@ -24,7 +24,7 @@ with Arch.MMU;                 use Arch.MMU;
 with Arch.Debug;               use Arch.Debug;
 with Lib.Panic;                use Lib.Panic;
 
-package body Arch.CLINT is
+package body Arch.CLINT with SPARK_Mode => Off is
 
    ----------------------------------------------------------------------------
    --  CLINT MMIO register offsets (per RISC‑V spec)

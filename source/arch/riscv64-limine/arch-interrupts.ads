@@ -65,16 +65,17 @@ package Arch.Interrupts with SPARK_Mode => Off is
    type Frame is record
       --  Caller-saved registers
       x1_ra,  x4_tp,  x5_t0,  x6_t1,  x7_t2   : Unsigned_64;
-      x10_a0, x11_a1, x12_a2, x13_a3           : Unsigned_64;
-      x14_a4, x15_a5, x16_a6, x17_a7           : Unsigned_64;
-      x28_t3, x29_t4, x30_t5, x31_t6           : Unsigned_64;
+      x10_a0, x11_a1, x12_a2, x13_a3          : Unsigned_64;
+      x14_a4, x15_a5, x16_a6, x17_a7          : Unsigned_64;
+      x28_t3, x29_t4, x30_t5, x31_t6          : Unsigned_64;
       --  Callee-saved registers
-      x2_sp, x3_gp, x8_s0, x9_s1               : Unsigned_64;
-      x18_s2, x19_s3, x20_s4, x21_s5           : Unsigned_64;
-      x22_s6, x23_s7, x24_s8, x25_s9           : Unsigned_64;
-      x26_s10, x27_s11                         : Unsigned_64;
+      x2_sp, x3_gp, x8_s0, x9_s1              : Unsigned_64;
+      x18_s2, x19_s3, x20_s4, x21_s5          : Unsigned_64;
+      x22_s6, x23_s7, x24_s8, x25_s9          : Unsigned_64;
+      x26_s10, x27_s11                        : Unsigned_64;
       --  Control/Status registers
-      sepc, scause, stval, sstatus             : Unsigned_64;
+      sepc, scause, stval, sstatus            : Unsigned_64;
+      fcsr                                    : Unsigned_64;
       --  Lazy floating-point context pointer
       FP_Context_Ptr : System.Address := System.Null_Address;
    end record with Pack;
