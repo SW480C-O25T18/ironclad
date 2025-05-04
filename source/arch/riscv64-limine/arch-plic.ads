@@ -1,5 +1,10 @@
 --  arch-plic.ads: Specification of Platform-Level Interrupt Controller
 --  (PLIC) utilities.
+--  Provides an interface for configuring and managing the PLIC on
+--  RISC-V64 systems.
+--  Handles interrupt enabling, priority management, and
+--  context-specific configurations.
+--  Fully compliant with the RISC-V PLIC v1.0/v1.1 specifications.
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
@@ -26,7 +31,7 @@ package Arch.PLIC with SPARK_Mode => Off is
    --  Types
    ---------------------------------------------------------------------------
    --  Identifier for an interrupt source
-   type IRQ_Id     is new Unsigned_32;
+   type IRQ_Id is new Unsigned_32;
 
    --  Identifier for a context (Machine or Supervisor)
    type Context_Id is new Unsigned_32;
@@ -35,15 +40,19 @@ package Arch.PLIC with SPARK_Mode => Off is
    --  Global Variables (post-configuration)
    ---------------------------------------------------------------------------
    --  Base virtual address of the PLIC region
-   Plic_Base     : System.Address;
+   Plic_Base : System.Address;
+
    --  Byte-offset of PLIC region from its base address
    Plic_Base_Off : Storage_Offset;
+
    --  Number of interrupt sources supported
-   Num_Sources   : Unsigned_32;
+   Num_Sources : Unsigned_32;
+
    --  Number of contexts (2 × hart count)
-   Num_Contexts  : Unsigned_64;
+   Num_Contexts : Unsigned_64;
+
    --  Detected PLIC version (1.0, 1.1, etc.)
-   Plic_Version  : Unsigned_32;
+   Plic_Version : Unsigned_32;
 
    ---------------------------------------------------------------------------
    --  Presence Detection
@@ -129,19 +138,21 @@ private
    --  PLIC Register Offsets (bytes)
    ---------------------------------------------------------------------------
    --  Base for priority registers: Plic_Base + Priority_Base + 4×IRQ_Id
-   Priority_Base   : constant Storage_Offset := 0;
-   Priority_Step   : constant Storage_Offset := 4;
+   Priority_Base : constant Storage_Offset := 0;
+   Priority_Step : constant Storage_Offset := 4;
 
    --  Enable bits start at Plic_Base + Enable_Base + Context_Stride×Ctx
-   Enable_Base     : constant Storage_Offset := 16#2000#;
+   Enable_Base : constant Storage_Offset := 16#2000#;
 
    --  Per-context stride for enable, threshold, and claim regions
-   Context_Stride  : constant Storage_Offset := 16#1000#;
+   Context_Stride : constant Storage_Offset := 16#1000#;
 
-   --  Threshold register at Plic_Base + Threshold_Base + Context_Stride×Ctx
-   Threshold_Base  : constant Storage_Offset := 16#200000#;
+   --  Threshold register at Plic_Base +
+   --  Threshold_Base + Context_Stride×Ctx
+   Threshold_Base : constant Storage_Offset := 16#200000#;
 
-   --  Claim/Complete register at Plic_Base + Threshold_Base + 4 + Context_Stride×Ctx
-   Claim_Base      : constant Storage_Offset := 16#200004#;
+   --  Claim/Complete register at Plic_Base +
+   --  Threshold_Base + 4 + Context_Stride×Ctx
+   Claim_Base : constant Storage_Offset := 16#200004#;
 
 end Arch.PLIC;
