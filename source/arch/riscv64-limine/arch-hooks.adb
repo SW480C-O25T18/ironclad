@@ -105,37 +105,36 @@ package body Arch.Hooks is
    --  ---------------------------------------------------------------------
    --  Panic_SMP_Hook: Handles system-wide panic for SMP systems.
    --  ---------------------------------------------------------------------
+   --  Panic_SMP_Hook: Handles system-wide panic for SMP systems.
    procedure Panic_SMP_Hook is
-      --  Obtain the ID of the current hart by reading the mhartid CSR.
+      -- Obtain the ID of the current hart by reading the mhartid CSR.
       Current_Hart : constant Unsigned_64 := CPU.Read_Hart_ID;
-      --  Use the global core count from Arch.CPU
-      --  as the total number of active harts.
+      -- Use the global core count from Arch.CPU as the total number of active harts.
       Hart_Count   : constant Positive := Arch.CPU.Core_Count;
    begin
-      --  Disable interrupts on the current core.
+      -- Disable interrupts on the current core.
       Arch.Snippets.Disable_Interrupts;
 
-      --  Signal all other harts to enter panic state by
-      --  sending a software interrupt.
+      -- Signal all other harts to enter panic state by sending a software interrupt.
       for H in 0 .. Hart_Count - 1 loop
-         if Unsigned_64 (H) /= Current_Hart then
-            Arch.CLINT.Send_Software_Interrupt (Unsigned_64 (H), True);
-            Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart "
-                        & Unsigned_64'Image (Unsigned_64 (H)));
+         if Unsigned_64(H) /= Current_Hart then
+            Arch.CLINT.Send_Software_Interrupt(Unsigned_64(H)); -- Fixed: Removed the second argument
+            Debug.Print("Panic_SMP_Hook: Sent software interrupt to hart "
+                        & Unsigned_64'Image(Unsigned_64(H)));
          else
-            Debug.Print ("Panic_SMP_Hook: Skipping current hart "
-                        & Unsigned_64'Image (Current_Hart));
+            Debug.Print("Panic_SMP_Hook: Skipping current hart "
+                        & Unsigned_64'Image(Current_Hart));
          end if;
       end loop;
 
-      --  Print a system-wide panic message.
-      Debug.Print ("Panic_SMP_Hook: Panic: System Halted");
+      -- Print a system-wide panic message.
+      Debug.Print("Panic_SMP_Hook: Panic: System Halted");
 
-      --  Halt the current hart (this core halts last).
+      -- Halt the current hart (this core halts last).
       Arch.Snippets.HCF;
    exception
       when others =>
-         Debug.Print ("Panic_SMP_Hook: Exception occurred");
+         Debug.Print("Panic_SMP_Hook: Exception occurred");
          null;
    end Panic_SMP_Hook;
 
