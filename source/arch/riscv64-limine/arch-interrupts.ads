@@ -143,6 +143,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    procedure Handle_Trap
      (Frame_Ptr : access Frame)
      with Pre => Frame_Ptr /= null and then Frame_Ptr.sepc mod 4 = 0;
+     pragma Export (C, Handle_Trap, "Handle_Trap");
 
    ---------------------------------------------------------------------------
    --  Device-tree IRQ Convenience
