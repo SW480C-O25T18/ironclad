@@ -55,4 +55,6 @@ package Arch.CLINT with SPARK_Mode => Off is
    procedure Disable_Timer_Interrupt;
    procedure Enable_Timer_Interrupt;
 
+   procedure Reg_Addr (Off : Storage_Offset) return Address;
+
 end Arch.CLINT;

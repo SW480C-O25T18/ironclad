@@ -14,15 +14,14 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces;               use Interfaces;
-with System;                   use System;
-with System.Storage_Elements;  use System.Storage_Elements;
-with Arch.CPU;                 use Arch.CPU;
-with Arch.DTB;                 use Arch.DTB;
-with Arch.SBI;                 use Arch.SBI;
-with Arch.MMU;                 use Arch.MMU;
-with Arch.Debug;               use Arch.Debug;
-with Lib.Panic;                use Lib.Panic;
+with System;                  use System;
+with Arch.CPU;                use Arch.CPU;
+with Arch.DTB;                use Arch.DTB;
+with Arch.SBI;                use Arch.SBI;
+with Arch.MMU;                use Arch.MMU;
+with Arch.Debug;              use Arch.Debug;
+with Lib.Panic;               use Lib.Panic;
+with System.Machine_Code;     use System.Machine_Code;
 
 package body Arch.CLINT with SPARK_Mode => Off is
 
@@ -39,8 +38,6 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    Clint_Base         : Address        := Null_Address;
    Clint_Base_Off     : Storage_Offset := 0;
-   Timebase_Frequency : Unsigned_64    := 0;
-     -- Will be set from DTB "timebase-frequency" property, if present
 
    ----------------------------------------------------------------------------
    --  Helper: get an MMIO register’s virtual address
@@ -65,7 +62,10 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    procedure Set_CLINT_Configuration is
       Node    : DTB_Node_Access := Find_Node_By_Compatible ("riscv,clint0");
-      Regs    : Unsigned_64_Array;
+      -- A DTB will return 3 registers to configure the CLINT:
+      -- Base address, size of the memory region, and additional properties.
+      subtype Constrained_Unsigned_64_Array is Unsigned_64_Array (1 .. 3);
+      Regs    : Constrained_Unsigned_64_Array;
       Base    : Unsigned_64;
       Size    : Unsigned_64;
       Phys    : Address;
@@ -135,7 +135,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Off : Storage_Offset := 
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
-      pragma Assert (Hart_Id < Unsigned_64 (Get_Hart_Count));
+      pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
       Debug.Print ("Arch.CLINT: Initializing hart "
                    & Unsigned_64'Image (Hart_Id));
 
@@ -163,7 +163,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Off  : Storage_Offset :=
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Target_Hart));
    begin
-      pragma Assert (Target_Hart < Unsigned_64 (Get_Hart_Count));
+      pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
       if Probe_Extension (Extension_Ipi) then
          Debug.Print ("Arch.CLINT: Sending SBI IPI to hart "
                       & Unsigned_64'Image (Target_Hart));
@@ -184,7 +184,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Off : Storage_Offset :=
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
-      pragma Assert (Hart_Id < Unsigned_64 (Get_Hart_Count));
+      pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
       if Probe_Extension (Extension_Ipi) then
          return;
       end if;
@@ -202,7 +202,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Mask : constant Unsigned_64 :=
         Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
    begin
-      pragma Assert (Target_Hart < Unsigned_64 (Get_Hart_Count));
+      pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
       if Probe_Extension (Extension_Fence_Ipi) then
          Debug.Print ("Arch.CLINT: Sending SBI fence‑IPI to hart "
                       & Unsigned_64'Image (Target_Hart));
