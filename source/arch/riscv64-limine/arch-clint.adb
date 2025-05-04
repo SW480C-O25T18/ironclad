@@ -61,8 +61,8 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    procedure Set_CLINT_Configuration is
       Node    : DTB_Node_Access := Find_Node_By_Compatible ("riscv,clint0");
-      -- A DTB will return 3 registers to configure the CLINT:
-      -- Base address, size of the memory region, and additional properties.
+      --  A DTB will return 3 registers to configure the CLINT:
+      --  Base address, size of the memory region, and additional properties.
       subtype Constrained_Unsigned_64_Array is Unsigned_64_Array (1 .. 3);
       Regs    : Constrained_Unsigned_64_Array;
       Base    : Unsigned_64;
@@ -111,28 +111,13 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Clint_Base_Off := Storage_Offset (To_Integer (Virt));
       Debug.Print ("Arch.CLINT: MMIO mapped at " & Address'Image (Clint_Base));
 
-      --  Discover timebase-frequency (Hz), if present
-      begin
-         declare
-            FreqArr : Unsigned_64_Array :=
-               Get_Property_Unsigned_64 (Node, "timebase-frequency");
-         begin
-            Timebase_Frequency := FreqArr (1);
-            Debug.Print ("Arch.CLINT: timebase-frequency="
-                         & Unsigned_64'Image (Timebase_Frequency));
-         end;
-      exception
-         when others =>
-            Debug.Print ("Arch.CLINT: timebase-frequency missing; default="
-                         & Unsigned_64'Image (Timebase_Frequency));
-      end;
    end Set_CLINT_Configuration;
 
    ----------------------------------------------------------------------------
    --  Hart-specific initialization: clear MSIP
    ----------------------------------------------------------------------------
    procedure Initialize_Hart (Hart_Id : Unsigned_64) is
-      Off : Storage_Offset := 
+      Off : Storage_Offset :=
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
       pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
@@ -161,7 +146,8 @@ package body Arch.CLINT with SPARK_Mode => Off is
       Mask : constant Unsigned_64 :=
         Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
       Off  : Storage_Offset :=
-        Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Target_Hart));
+        Clint_Base_Off + MSIP_Base +
+        Storage_Offset (4 * Integer (Target_Hart));
    begin
       pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
       if Probe_Extension (Extension_Ipi) then
