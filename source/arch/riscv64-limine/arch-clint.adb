@@ -14,7 +14,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with System;                  use System;
 with Arch.CPU;                use Arch.CPU;
 with Arch.DTB;                use Arch.DTB;
 with Arch.SBI;                use Arch.SBI;
@@ -83,11 +82,15 @@ package body Arch.CLINT with SPARK_Mode => Off is
          return;
       end if;
 
-      Regs := Get_Property_Unsigned_64 (Node, "reg");
-      Base := Regs (1);
-      Size := Regs (2);
-      Phys := To_Address (Integer_Address (Base));
-      Virt := Phys;
+      declare
+         Regs : Unsigned_64_Array (1 .. 3);
+      begin
+         Regs := Get_Property_Unsigned_64 (Node, "reg");
+         Base := Regs (1);
+         Size := Regs (2);
+         Phys := To_Address (Integer_Address (Base));
+         Virt := Phys;
+      end;
 
       Map_Range (
         Map            => Kernel_Table,
