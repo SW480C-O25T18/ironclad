@@ -15,7 +15,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Interfaces;                   use Interfaces;
-with Ada.Interrupts;               use Ada.Interrupts;
 with Arch.CPU;                     use Arch.CPU;
 with Arch.Context;                 use Arch.Context;
 with Arch.CLINT;                   use Arch.CLINT;
