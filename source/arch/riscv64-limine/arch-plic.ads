@@ -15,12 +15,9 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Interfaces;               use Interfaces;
-with System;                   use System;
 with System.Storage_Elements;  use System.Storage_Elements;
 with Arch.DTB;                 use Arch.DTB;
 with Arch.MMU;                 use Arch.MMU;
-with Arch.Debug;               use Arch.Debug;
-with Arch.CPU;                 use Arch.CPU;
 
 package Arch.PLIC with SPARK_Mode => Off is
 

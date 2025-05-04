@@ -15,13 +15,6 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Interfaces;        use Interfaces;
-with Arch.CPU;          use Arch.CPU;
-with Arch.CLINT;        use Arch.CLINT;
-with Arch.PLIC;         use Arch.PLIC;
-with Arch.Context;      use Arch.Context;
-with Arch.DTB;          use Arch.DTB;
-with Arch.Debug;        use Arch.Debug;
-with Arch.Local;        use Arch.Local;
 with System;            use System;
 
 package Arch.Interrupts with SPARK_Mode => Off is

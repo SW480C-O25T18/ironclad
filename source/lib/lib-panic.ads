@@ -14,10 +14,9 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces; use Interfaces;
-with Lib.Messages;
 with Arch.Clocks;
 with Arch.Context;
+with Lib.Messages;
 
 package Lib.Panic with
    Abstract_State => Panic_State,
