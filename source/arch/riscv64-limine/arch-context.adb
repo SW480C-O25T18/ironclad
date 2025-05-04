@@ -26,8 +26,11 @@ with Ada.Unchecked_Conversion;
 with Arch.Local;          use Arch.Local;
 with Arch.Debug;          use Arch.Debug;
 with Lib.Panic;           use Lib.Panic;
+with Arch.Interrupts; use Arch.Interrupts;
 
 package body Arch.Context is
+
+   type Unsigned_8_Array is array (Positive range <>) of Unsigned_8;
 
    ----------------------------------------------------------------------------
    --  Global Variables for Floating-Point Context Routines
@@ -81,9 +84,10 @@ package body Arch.Context is
    --  Floating-Point Context Routines for D Extension
    ----------------------------------------------------------------------------
    procedure Init_FP_Context_D (Ctx : out FP_Context) is
-      Addr : System.Address := System.Address(Memory.Physical.Alloc(FP_Context'Size));
+      Addr : System.Address :=
+      System.Address(Memory.Physical.Alloc(FP_Context'Size));
    begin
-      Set_Memory(Addr, System.Storage_Elements.Integer_Address(FP_Context'Size), 0);
+      Set_Memory(Addr, Interfaces.C.size_t(FP_Context'Size), 0);
       Ctx := Addr_To_FP_Context(Addr);
       Arch.Debug.Print("Init_FP_Context_D: Initialized D extension context");
    exception
@@ -136,7 +140,8 @@ package body Arch.Context is
 
    procedure Destroy_FP_Context_D (Ctx : in out FP_Context) is
    begin
-      Memory.Physical.Free(Addr_To_U64(FP_Context_To_Addr(Ctx)));
+      Memory.Physical.Free(
+         Interfaces.C.size_t(Addr_To_U64(FP_Context_To_Addr(Ctx))));
       Ctx := Addr_To_FP_Context(System.Null_Address);
    exception
       when others =>
@@ -148,9 +153,11 @@ package body Arch.Context is
    --  Floating-Point Context Routines for F Extension
    ----------------------------------------------------------------------------
    procedure Init_FP_Context_F (Ctx : out FP_Context) is
-      Addr : System.Address := System.Address(Memory.Physical.Alloc(FP_Context'Size));
+      Addr : System.Address :=
+      System.Address(Memory.Physical.Alloc(FP_Context'Size));
    begin
-      Set_Memory(Addr, System.Storage_Elements.Integer_Address(FP_Context'Size), 0);
+      Set_Memory(
+         Addr, System.Storage_Elements.Integer_Address(FP_Context'Size), 0);
       Ctx := Addr_To_FP_Context(Addr);
       Arch.Debug.Print("Init_FP_Context_F: Initialized F extension context");
    exception
@@ -245,7 +252,9 @@ package body Arch.Context is
       MISA_Value : Unsigned_64;
    begin
       -- Read the MISA CSR
-      Machine_Code.Asm("csrr %0, misa", Outputs => (MISA_Value));
+      Machine_Code.Asm(
+         "csrr %0, misa", Outputs => (
+            Unsigned_64'Asm_Output("=r", MISA_Value)));
 
       -- Check for D and F extensions
       if (MISA_Value and 16#8#) /= 0 then
