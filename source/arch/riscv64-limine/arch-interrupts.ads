@@ -16,6 +16,9 @@
 
 with Interfaces;        use Interfaces;
 with System;            use System;
+with Arch.CLINT;      use Arch.CLINT;
+with Arch.PLIC;       use Arch.PLIC;
+with Arch.DTB;        use Arch.DTB;
 
 package Arch.Interrupts with SPARK_Mode => Off is
 
