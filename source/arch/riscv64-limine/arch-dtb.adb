@@ -208,37 +208,62 @@ package body Arch.DTB with SPARK_Mode => Off is
    -----------------------------------------------------------------------------
    function Init return Boolean is
       type HDR_Ptr is access all FDT_Header;
-      function To_HDR_Ptr is new Ada.Unchecked_Conversion (Address, HDR_Ptr);
-      HDR : HDR_Ptr := To_HDR_Ptr (Limine.DTB_Response.DTB_Addr);
+      function To_HDR_Ptr is new Ada.Unchecked_Conversion (
+         Source => Address,
+         Target => HDR_Ptr);
+      HDR : HDR_Ptr := null;
    begin
+      -- Check if the DTB address is null
       if Limine.DTB_Response.DTB_Addr = System.Null_Address then
          Debug.Print ("Init: DTB address is null. Cannot initialize DTB.");
          return False;
       end if;
 
+      -- Convert the DTB address to an HDR pointer
+      HDR := To_HDR_Ptr (Limine.DTB_Response.DTB_Addr);
+
+      -- Check if the HDR pointer is null
       if HDR = null then
          Debug.Print ("Init: No DTB response.");
          return False;
       end if;
 
+      -- Validate the DTB magic number
       if BE_To_Host (HDR.Magic) /= FDT_MAGIC then
          Debug.Print ("Init: Invalid DTB magic number.");
          return False;
       end if;
 
-      Struct_Base  := Limine.DTB_Response.DTB_Addr + To_Address (HDR.Offset_DT_Struct);
-      Strings_Base := Limine.DTB_Response.DTB_Addr + To_Address (HDR.Offset_DT_Strings);
-      DTB_End      := Limine.DTB_Response.DTB_Addr + To_Address (HDR.Size_DT_Struct);
+      -- Calculate base addresses using proper type conversions
+      Struct_Base :=
+         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
+         To_Address (Integer (BE_To_Host (HDR.Offset_DT_Struct)));
 
+      Strings_Base :=
+         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
+         To_Address (Integer (BE_To_Host (HDR.Offset_DT_Strings)));
+
+      DTB_End :=
+         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
+         To_Address (Integer (BE_To_Host (HDR.Size_DT_Struct)));
+
+      -- Debug output for calculated addresses
       Debug.Print ("Init: Struct_Base = " & Address'Image (Struct_Base));
       Debug.Print ("Init: Strings_Base = " & Address'Image (Strings_Base));
       Debug.Print ("Init: DTB_End = " & Address'Image (DTB_End));
 
+      -- Parse the DTB
       Parse_DTB;
       return True;
    exception
+      when Constraint_Error =>
+         Debug.Print ("Init: Constraint_Error occurred during initialization.");
+         return False;
+      when Program_Error =>
+         Debug.Print ("Init: Program_Error occurred during initialization.");
+         return False;
       when others =>
-         Debug.Print ("Init: Exception occurred during initialization.");
+         Debug.Print ("Init: Unknown exception occurred during initialization.");
          return False;
    end Init;
 
@@ -298,26 +323,55 @@ package body Arch.DTB with SPARK_Mode => Off is
    -----------------------------------------------------------------------------
    function Find_Node_By_Compatible (Compat : String) return DTB_Node_Access is
       function Search (N : DTB_Node_Access) return DTB_Node_Access is
+         Result : DTB_Node_Access := null;
       begin
+         -- Check properties for "compatible"
          for I in 1 .. N.Prop_Count loop
-            if N.Properties (I).Name = "compatible" and then
-               Contains_Substring (String (N.Properties (I).Value), Compat) then
-               return N;
+            if N.Properties (I) /= null and then N.Properties (
+               I).Name = "compatible" then
+               declare
+                  Prop_Value : constant String :=
+                     String (N.Properties (I).Value);
+               begin
+                  if Contains_Substring (Prop_Value, Compat) then
+                     return N;
+                  end if;
+               exception
+                  when others =>
+                     Debug.Print ("Search: Exception occurred while checking property value.");
+                     return null;
+               end;
             end if;
          end loop;
+
+         -- Recursively search child nodes
          for J in 1 .. N.Child_Count loop
-            declare
-               C : DTB_Node_Access := Search (N.Children (J));
-            begin
-               if C /= null then
-                  return C;
-               end if;
-            end;
+            if N.Children (J) /= null then
+               declare
+                  C : DTB_Node_Access := null;
+               begin
+                  C := Search (N.Children (J));
+                  if C /= null then
+                     return C;
+                  end if;
+               exception
+                  when others =>
+                     Debug.Print ("Search: Exception occurred while searching child nodes.");
+                     return null;
+               end;
+            end if;
          end loop;
+
          return null;
+      exception
+         when others =>
+            Debug.Print ("Search: Exception occurred.");
+            return null;
       end Search;
+
    begin
       if Root_Node = null then
+         Debug.Print ("Find_Node_By_Compatible: Root node is null.");
          return null;
       else
          return Search (Root_Node);
@@ -387,7 +441,7 @@ package body Arch.DTB with SPARK_Mode => Off is
       --  Precondition: Ensure Node is not null
       if Node = null then
          Debug.Print ("Get_Property_Unsigned_64: Node is null.");
-         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
+         return Unsigned_64_Array'(1 .. 0 => Unsigned_64(0));
       end if;
 
       --  Find the property by name
@@ -402,12 +456,12 @@ package body Arch.DTB with SPARK_Mode => Off is
       if Prop = null then
          Debug.Print ("Get_Property_Unsigned_64: Property '" &
          Name & "' not found in node.");
-         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
+         return Unsigned_64_Array'(1 .. 0 => Unsigned_64(0));
       end if;
 
       --  Allocate and populate the result array
       declare
-         Result : Unsigned_64_Array (1 .. Natural (Prop.Len)) := (others => 0);
+         Result : Unsigned_64_Array (1 .. Prop.Len) := [others => 0];
       begin
          for I in 1 .. Prop.Len loop
             Result (I) := Prop.Value (I);
@@ -419,7 +473,7 @@ package body Arch.DTB with SPARK_Mode => Off is
       when others =>
          Debug.Print ("Get_Property_Unsigned_64: " &
          "Exception occurred while fetching property '" & Name & "'.");
-         return new Unsigned_64_Array (1 .. 0); -- Return an empty array
+         return (1 .. 0 => 0); -- Return an empty array
    end Get_Property_Unsigned_64;
 
 end Arch.DTB;
