@@ -57,6 +57,3 @@
 .set FRAME_FPCTX,   280     # FP_Context_Ptr
 
 .set FRAME_SIZE,    288     # Total size of Frame
-
-# TCB layout
-.set TCB_FPCTX,     128     # offset of FP_Context_Ptr in TCB

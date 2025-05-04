@@ -14,7 +14,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-.include "arch-offsets.inc"
+.include "arch-offsets.inc"  # Ensure this file defines all FRAME_* macros and offsets
 
 .section .text
 .global trap_entry
@@ -67,13 +67,18 @@ trap_entry:
     csrr t0, sstatus
     sd t0, FRAME_SSTATUS(sp)           # Save supervisor status
 
-    ld t1, TCB_FPCTX(tp)
-    sd t1, FRAME_FPCTX(sp)             # Save FP_Context pointer
+        # Enable nested interrupts (re-enable S-mode exceptions)
+    li t0, 2                         # SIE bit mask
+    csrs sstatus, t0                 # set SIE to allow nested interrupts
+
+    ld t1, TCB_FPCTX(tp)             # Ensure TCB_FPCTX is defined and points to the correct offset
+    sd t1, FRAME_FPCTX(sp)           # Save FP_Context pointer
 
     mv a0, sp                          # Pass Frame pointer
-    call Handle_Trap                   # Call kernel trap handler
+    call Handle_Trap                   # Ensure Handle_Trap is defined in the linked kernel code
 
 .global trap_exit
+.type trap_exit, @function
 trap_exit:
     ld ra, FRAME_RA(sp)                # Restore x1 (ra)
     ld tp, FRAME_TP(sp)                # Restore x4 (tp)
@@ -110,5 +115,11 @@ trap_exit:
     ld s10, FRAME_S10(sp)              # Restore x26 (s10)
     ld s11, FRAME_S11(sp)              # Restore x27 (s11)
 
-    addi sp, sp, FRAME_SIZE            # Free trap frame
-    sret                               # Return from trap
+        # Restore supervisor CSRs before return
+    ld t0, FRAME_SSTATUS(sp)            # Load sstatus from frame
+    csrw sstatus, t0                    # Restore sstatus CSR
+    ld t0, FRAME_SEPC(sp)               # Load sepc from frame
+    csrw sepc, t0                       # Restore sepc CSR
+
+    addi sp, sp, FRAME_SIZE             # Free trap frame
+    sret                                # Return from trap
