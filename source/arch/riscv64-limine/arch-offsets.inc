@@ -49,5 +49,5 @@
 #  TCB_* macros to access the current-context pointer in the TCB via TP
 #  The TCB_CONTEXT_OFFSET in Ada is 208 bytes, so:
 # Offset of the context-pointer field in the TCB
-.set TCB_FPCTX,      208     
+.set TCB_FPCTX,      80     
 

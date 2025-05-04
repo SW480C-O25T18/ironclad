@@ -48,7 +48,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    ---------------------------------------------------------------------------
    --  Thread Control Block context offset (bytes)
    ---------------------------------------------------------------------------
-   TCB_CONTEXT_OFFSET : constant Natural := 208;
+   TCB_CONTEXT_OFFSET : constant Natural := 80;
    function Get_TCB_OFFSET return Unsigned_64;
    pragma Inline (Get_TCB_OFFSET);
    --  Byte offset of saved Frame in the TCB.
