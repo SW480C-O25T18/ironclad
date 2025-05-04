@@ -1,4 +1,5 @@
---  arch-plic.ads: Specification of Platform-Level Interrupt Controller (PLIC) utilities.
+--  arch-plic.ads: Specification of Platform-Level Interrupt Controller
+--  (PLIC) utilities.
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify

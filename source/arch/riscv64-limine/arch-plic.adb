@@ -15,11 +15,6 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces;               use Interfaces;
-with System;                   use System;
-with System.Storage_Elements;  use System.Storage_Elements;
-with Arch.DTB;                 use Arch.DTB;
-with Arch.MMU;                 use Arch.MMU;
 with Arch.Debug;               use Arch.Debug;
 with Arch.CPU;                 use Arch.CPU;
 with Lib.Panic;                use Lib.Panic;
@@ -31,7 +26,7 @@ package body Arch.PLIC is
    -------------------------------------------------------------------------
    function Reg_Addr (Off : Storage_Offset) return Address is
    begin
-      return To_Address (Plic_Base_Off + Off);
+      return To_Address (Integer_Address (Plic_Base_Off) + Integer (Off));
    end Reg_Addr;
 
    -------------------------------------------------------------------------
@@ -46,25 +41,16 @@ package body Arch.PLIC is
    --  Configuration: map MMIO, read #sources, contexts, version
    -------------------------------------------------------------------------
    procedure Set_PLIC_Configuration is
-      Node    : DTB_Node_Access := Find_Node_By_Compatible ("riscv,plic0");
-      Regs    : Unsigned_64_Array;
-      Base    : Unsigned_64;
-      Size    : Unsigned_64;
-      Phys    : Address;
-      Virt    : Address;
-      Success : Boolean;
-      Vers    : Unsigned_64_Array;
+      Node : DTB_Node_Access := Find_Node_By_Compatible ("riscv,plic0");
    begin
-      Debug.Print ("Arch.PLIC: Configuring PLIC");
       if Node = null then
          Debug.Print ("Arch.PLIC: DTB node not found; PLIC disabled");
          return;
       end if;
 
       --  Parse 'reg' property
-      Regs := Get_Property_Unsigned_64 (Node, "reg");
-      Base := Regs (1);
-      Size := Regs (2);
+      Base := Get_Property_Unsigned_64 (Node, "reg", 1);
+      Size := Get_Property_Unsigned_64 (Node, "reg", 2);
       Phys := To_Address (Storage_Offset (Base));
       Virt := Phys;
 
