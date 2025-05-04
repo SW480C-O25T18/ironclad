@@ -14,6 +14,7 @@
 --  along with this program.  If not, see [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 
 with Interfaces;                     use Interfaces;
+with System;                         use System;
 
 package Arch.CLINT with SPARK_Mode => Off is
 
