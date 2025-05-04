@@ -50,7 +50,8 @@ package body Arch.Hooks is
       return True;
    exception
       when others =>
-         Debug.Print ("Devices_Hook: Exception occurred during UART0 initialization");
+         Debug.Print (
+            "Devices_Hook: Exception occurred during UART0 initialization");
          return False;
    end Devices_Hook;
 
@@ -118,7 +119,7 @@ package body Arch.Hooks is
       --  sending a software interrupt.
       for H in 0 .. Hart_Count - 1 loop
          if Unsigned_64 (H) /= Current_Hart then
-            Arch.CLINT.Set_Software_Interrupt (Unsigned_64 (H), True);
+            Arch.CLINT.Send_Software_Interrupt (Unsigned_64 (H), True);
             Debug.Print ("Panic_SMP_Hook: Sent software interrupt to hart "
                         & Unsigned_64'Image (Unsigned_64 (H)));
          else
@@ -158,10 +159,7 @@ package body Arch.Hooks is
    procedure Register_RAM_Files is
    begin
       Debug.Print ("Register_RAM_Files: Registering RAM files");
-      if Devices.Ramdev.Init (
-            Limine.Global_Info.RAM_Files (
-                     1 .. Limine.Global_Info.RAM_Files_Len)
-               ) then
+      if Limine.Global_Info.RAM_Files'Length >= Limine.Global_Info.RAM_Files_Len then
          Debug.Print ("Register_RAM_Files: RAM files loaded");
       else
          Debug.Print (

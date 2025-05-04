@@ -20,6 +20,11 @@ package Arch.CLINT with SPARK_Mode => Off is
    --  Availability: prefer SBI virtualization, fallback to MMIO
    function CLINT_Enabled return Boolean;
 
+   ----------------------------------------------------------------------------
+   --  Global configuration: map MMIO or rely on SBI
+   ----------------------------------------------------------------------------
+   procedure Set_CLINT_Configuration;
+
    -----------------------------------------------------------
    --  Monotonic timer frequency (ticks per second)
    --  Initialized from the DTB "timebase-frequency" property
