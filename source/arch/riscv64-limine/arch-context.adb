@@ -64,9 +64,13 @@ package body Arch.Context is
       Ptr : Interfaces.Unsigned_8_Array (1 .. Size)
         with Address => Addr;
    begin
-      for I in Ptr'Range loop
-         Ptr (I) := Value;
-      end loop;
+      if Size > 0 then
+         for I in 1 .. Size loop
+            Ptr (I) := Value;
+         end loop;
+      else
+         Arch.Debug.Print("Set_Memory: Size is zero, no memory initialized");
+      end if;
    exception
       when others =>
          Arch.Debug.Print("Set_Memory: Exception encountered");

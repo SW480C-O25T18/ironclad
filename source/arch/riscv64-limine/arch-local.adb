@@ -87,7 +87,7 @@ package body Arch.Local is
       Ptr : Unsigned_64;
    begin
       Asm ("mv %0, tp", Outputs => (Ptr));
-      return To_Address (Storage_Offset (Ptr));
+      return To_Address (Ptr);
    exception
       when others =>
          Hard_Panic ("Arch.Local: Fetch_TCB failed");
@@ -97,7 +97,7 @@ package body Arch.Local is
    --  Load_TCB: write the given TCB pointer into TP register
    ----------------------------------------------------------------------------
    procedure Load_TCB (TCB : System.Address) is
-      Ptr : constant Unsigned_64 := Unsigned_64 (To_Address (TCB));
+      Ptr : constant Unsigned_64 := Unsigned_64 (TCB);
    begin
       Asm ("mv tp, %0", Inputs => (Ptr));
    exception
