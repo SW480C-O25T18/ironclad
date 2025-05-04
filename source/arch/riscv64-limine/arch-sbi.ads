@@ -23,7 +23,20 @@ package Arch.SBI with SPARK_Mode => Off is
    --  Types
    ------------------------------------------------------------------------
    type Extension_Id is new Unsigned_64;
-     --  Encodes the SBI extension ID (legacy or string-based).
+     --  Encodes the SBI extension ID (legacy numeric or string‐based).
+
+   ------------------------------------------------------------------------
+   --  Known SBI Extension IDs
+   ------------------------------------------------------------------------
+   Extension_Timer       : constant Extension_Id := 16#0000_0000#;
+   Extension_Ipi         : constant Extension_Id := 16#0000_0004#;
+
+   --  v0.2+ string‐based IDs:
+   Extension_Timer_Str   : constant Extension_Id := 16#5449_4D45#; -- "TIME"
+   Extension_Ipi_Str     : constant Extension_Id := 16#7352_4950#; -- "sRIP"
+
+   Extension_Fence_Ipi   : constant Extension_Id := Extension_Ipi_Str;
+     --  Advanced fence‐IPI extension
 
    ------------------------------------------------------------------------
    --  Probe Extension
@@ -36,18 +49,20 @@ package Arch.SBI with SPARK_Mode => Off is
    --  Timer Management
    ------------------------------------------------------------------------
    procedure Set_Timer (Next_Time : Unsigned_64);
-     --  Requests a timer interrupt at the given absolute time.
+     --  Request a timer interrupt at the given absolute time.
+   function Get_Time return Unsigned_64;
+     --  Query the current time (SBI timer extension).
 
    ------------------------------------------------------------------------
-   --  Inter-Processor Interrupts (IPIs)
+   --  Inter‐Processor Interrupts (IPIs)
    ------------------------------------------------------------------------
    procedure Send_Ipi (Hart_Mask_Ptr : System.Address);
-     --  Sends software interrupts to harts specified in hart-mask.
+     --  Sends software interrupts to harts specified in hart‐mask.
 
    ------------------------------------------------------------------------
    --  Remote Fence (e.g., TLB shootdown)
    ------------------------------------------------------------------------
    procedure Remote_Fence (Hart_Mask_Ptr : System.Address);
-     --  Sends a remote fence IPI to harts specified in hart-mask.
+     --  Sends a remote fence IPI to harts specified in hart‐mask.
 
 end Arch.SBI;

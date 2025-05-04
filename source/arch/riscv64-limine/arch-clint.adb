@@ -37,17 +37,18 @@ package body Arch.CLINT is
    ----------------------------------------------------------------------------
    --  CLINT state
    ----------------------------------------------------------------------------
-   Clint_Base      : Address           := Null_Address;
-   Clint_Base_Off  : Storage_Offset    := 0;
+   Clint_Base         : Address        := Null_Address;
+   Clint_Base_Off     : Storage_Offset := 0;
    Timebase_Frequency : Unsigned_64    := 0;
-   --    Will be set from DTB "timebase-frequency" property (Hz), if present
+     -- Will be set from DTB "timebase-frequency" property, if present
 
    ----------------------------------------------------------------------------
    --  Helper: get an MMIO register’s virtual address
    ----------------------------------------------------------------------------
    function Reg_Addr (Off : Storage_Offset) return Address is
    begin
-      return To_Address (Clint_Base_Off + Off);
+      return To_Address
+        (Integer_Address (Clint_Base_Off + Off));
    end Reg_Addr;
 
    ----------------------------------------------------------------------------
@@ -72,26 +73,22 @@ package body Arch.CLINT is
       Success : Boolean;
    begin
       Debug.Print ("Arch.CLINT: Configuring CLINT");
-      --  Primary: SBI timer extension
       if Probe_Extension (Extension_Timer) then
          Debug.Print ("Arch.CLINT: Using SBI for timer & IPI");
          return;
       end if;
 
-      --  Fallback: MMIO via DTB
       if Node = null then
          Debug.Print ("Arch.CLINT: DTB node not found; CLINT disabled");
          return;
       end if;
 
-      --  Parse 'reg'
       Regs := Get_Property_Unsigned_64 (Node, "reg");
       Base := Regs (1);
       Size := Regs (2);
-      Phys := To_Address (Storage_Offset (Base));
+      Phys := To_Address (Integer_Address (Base));
       Virt := Phys;
 
-      --  Map CLINT MMIO
       Map_Range (
         Map            => Kernel_Table,
         Physical_Start => Phys,
@@ -112,10 +109,9 @@ package body Arch.CLINT is
 
       Clint_Base     := Virt;
       Clint_Base_Off := Storage_Offset (To_Integer (Virt));
-      Debug.Print ("Arch.CLINT: MMIO mapped at "
-                   & Address'Image (Clint_Base));
+      Debug.Print ("Arch.CLINT: MMIO mapped at " & Address'Image (Clint_Base));
 
-      --  Discover timebase‑frequency (Hz), if present
+      --  Discover timebase-frequency (Hz), if present
       begin
          declare
             FreqArr : Unsigned_64_Array :=
@@ -136,20 +132,21 @@ package body Arch.CLINT is
    --  Hart-specific initialization: clear MSIP
    ----------------------------------------------------------------------------
    procedure Initialize_Hart (Hart_Id : Unsigned_64) is
-      Off : Storage_Offset :=
+      Off : Storage_Offset := 
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
       pragma Assert (Hart_Id < Unsigned_64 (Get_Hart_Count));
       Debug.Print ("Arch.CLINT: Initializing hart "
                    & Unsigned_64'Image (Hart_Id));
 
-      if Probe_Extension (Extension_IPI) then
+      if Probe_Extension (Extension_Ipi) then
          Debug.Print ("Arch.CLINT: SBI handles MSIP clear");
          return;
       end if;
 
       declare
-         MSIP : Unsigned_32 with Address => To_Address (Off);
+         MSIP : Unsigned_32 with Address =>
+                  To_Address (Integer_Address (Off));
       begin
          MSIP := 0;
          Debug.Print ("Arch.CLINT: MSIP cleared for hart "
@@ -162,18 +159,19 @@ package body Arch.CLINT is
    ----------------------------------------------------------------------------
    procedure Send_Software_Interrupt (Target_Hart : Unsigned_64) is
       Mask : constant Unsigned_64 :=
-        Interfaces.Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
+        Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
       Off  : Storage_Offset :=
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Target_Hart));
    begin
       pragma Assert (Target_Hart < Unsigned_64 (Get_Hart_Count));
-      if Probe_Extension (Extension_IPI) then
+      if Probe_Extension (Extension_Ipi) then
          Debug.Print ("Arch.CLINT: Sending SBI IPI to hart "
                       & Unsigned_64'Image (Target_Hart));
          Send_Ipi (Mask'Address);
       else
          declare
-            MSIP : Unsigned_32 with Address => To_Address (Off);
+            MSIP : Unsigned_32 with Address =>
+                     To_Address (Integer_Address (Off));
          begin
             MSIP := 1;
             Debug.Print ("Arch.CLINT: MSIP set for hart "
@@ -187,11 +185,12 @@ package body Arch.CLINT is
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
       pragma Assert (Hart_Id < Unsigned_64 (Get_Hart_Count));
-      if Probe_Extension (Extension_IPI) then
+      if Probe_Extension (Extension_Ipi) then
          return;
       end if;
       declare
-         MSIP : Unsigned_32 with Address => To_Address (Off);
+         MSIP : Unsigned_32 with Address =>
+                  To_Address (Integer_Address (Off));
       begin
          MSIP := 0;
          Debug.Print ("Arch.CLINT: MSIP cleared for hart "
@@ -201,10 +200,10 @@ package body Arch.CLINT is
 
    procedure Send_Fence_Ipi (Target_Hart : Unsigned_64) is
       Mask : constant Unsigned_64 :=
-        Interfaces.Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
+        Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
    begin
       pragma Assert (Target_Hart < Unsigned_64 (Get_Hart_Count));
-      if Probe_Extension (Extension_FENCE_IPI) then
+      if Probe_Extension (Extension_Fence_Ipi) then
          Debug.Print ("Arch.CLINT: Sending SBI fence‑IPI to hart "
                       & Unsigned_64'Image (Target_Hart));
          Remote_Fence (Mask'Address);
@@ -218,20 +217,20 @@ package body Arch.CLINT is
    --  Timer interrupts
    ----------------------------------------------------------------------------
    procedure Set_Timer (Next_Time : Unsigned_64) is
-      Off      : Storage_Offset;
-      HartInt  : Integer := Integer (Read_Hart_ID);
+      Off     : Storage_Offset;
+      HartInt : Integer := Integer (Read_Hart_ID);
    begin
       if Probe_Extension (Extension_Timer) then
          Debug.Print ("Arch.CLINT: Setting SBI timer to "
                       & Unsigned_64'Image (Next_Time));
-         Arch.SBI.Set_Timer (Next_Time);
+         Set_Timer (Next_Time);
       else
          Off := Clint_Base_Off
                 + MTIMECMP_Base
                 + MTIMECMP_Step * Storage_Offset (HartInt);
          declare
             CMP : Unsigned_64 with Address =>
-                      To_Address (Off);
+                    To_Address (Integer_Address (Off));
          begin
             CMP := Next_Time;
             Debug.Print ("Arch.CLINT: MTIMECMP set to "
@@ -249,15 +248,15 @@ package body Arch.CLINT is
    procedure Disable_Timer_Interrupt is
    begin
       Debug.Print ("Arch.CLINT: Disabling timer interrupt (STIE clear)");
-      Asm ("li t0, 0x80");
-      Asm ("csrc sstatus, t0");
+      Asm ("li t0, 0x80", Volatile => True);
+      Asm ("csrc sstatus, t0", Volatile => True);
    end Disable_Timer_Interrupt;
 
    procedure Enable_Timer_Interrupt is
    begin
       Debug.Print ("Arch.CLINT: Enabling timer interrupt (STIE set)");
-      Asm ("li t0, 0x80");
-      Asm ("csrs sstatus, t0");
+      Asm ("li t0, 0x80", Volatile => True);
+      Asm ("csrs sstatus, t0", Volatile => True);
    end Enable_Timer_Interrupt;
 
    ----------------------------------------------------------------------------
@@ -266,12 +265,11 @@ package body Arch.CLINT is
    function Read_Timer return Unsigned_64 is
    begin
       if Probe_Extension (Extension_Timer) then
-         -- SBI timer extension provides current time
-         return Arch.SBI.Get_Time;
+         return Get_Time;
       else
          declare
             MTIME : Unsigned_64 with Address =>
-                      Reg_Addr (MTIME_Base);
+                     To_Address (Integer_Address (MTIME_Base));
          begin
             return MTIME;
          end;
