@@ -1,4 +1,6 @@
 --  arch-clint.adb: Implementation of Core Local Interruptor (CLINT) utilities.
+--  Provides functionality for timer and software interrupts using SBI or MMIO.
+--  Optimized for RISC-V64 systems with proper exception handling.
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
@@ -35,16 +37,25 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    --  CLINT state
    ----------------------------------------------------------------------------
-   Clint_Base         : Address        := Null_Address;
-   Clint_Base_Off     : Storage_Offset := 0;
+   Clint_Base           : Address         := Null_Address;
+   Clint_Base_Off       : Storage_Offset  := 0;
+   Timebase_Frequency   : Unsigned_64     := 0;
+   Core_Count           : Unsigned_64     := 0; -- Initialize to 0
+   Has_SBI             : Boolean         := False;
+   Has_MMIO            : Boolean         := False;
+   Has_CLINT           : Boolean         := False;
 
    ----------------------------------------------------------------------------
    --  Helper: get an MMIO register’s virtual address
    ----------------------------------------------------------------------------
    function Reg_Addr (Off : Storage_Offset) return Address is
    begin
-      return To_Address
-        (Integer_Address (Clint_Base_Off + Off));
+      return To_Address (Integer_Address (Clint_Base_Off + Off));
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Reg_Addr failed for offset " &
+            Storage_Offset'Image (Off));
+         return Null_Address;
    end Reg_Addr;
 
    ----------------------------------------------------------------------------
@@ -52,65 +63,99 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    function CLINT_Enabled return Boolean is
    begin
-      return Probe_Extension (Extension_Timer)
-         or else Clint_Base /= Null_Address;
+      return Has_CLINT;
    end CLINT_Enabled;
 
    ----------------------------------------------------------------------------
    --  Global configuration: map MMIO or rely on SBI
    ----------------------------------------------------------------------------
    procedure Set_CLINT_Configuration is
-      Node    : DTB_Node_Access := Find_Node_By_Compatible ("riscv,clint0");
-      --  A DTB will return 3 registers to configure the CLINT:
-      --  Base address, size of the memory region, and additional properties.
-      subtype Constrained_Unsigned_64_Array is Unsigned_64_Array (1 .. 3);
-      Regs    : Constrained_Unsigned_64_Array;
-      Base    : Unsigned_64;
-      Size    : Unsigned_64;
-      Phys    : Address;
-      Virt    : Address;
-      Success : Boolean;
+      Node    : constant DTB_Node_Access :=
+         Find_Node_By_Compatible ("riscv,clint0");
+      Base    : Unsigned_64 := 0;
+      Size    : Unsigned_64 := 0;
+      Phys    : Address := Null_Address;
+      Virt    : Address := Null_Address;
+      Success : Boolean := False;
    begin
       Debug.Print ("Arch.CLINT: Configuring CLINT");
-      if Probe_Extension (Extension_Timer) then
-         Debug.Print ("Arch.CLINT: Using SBI for timer & IPI");
+
+      -- Determine presence of MMIO and SBI
+      Has_SBI := Probe_Extension (Extension_Timer);
+      Has_MMIO := Node /= null;
+
+      -- Determine if CLINT is available
+      Has_CLINT := Has_SBI or Has_MMIO;
+
+      if not Has_CLINT then
+         Debug.Print ("Arch.CLINT: CLINT is not available");
          return;
       end if;
 
-      if Node = null then
-         Debug.Print ("Arch.CLINT: DTB node not found; CLINT disabled");
-         return;
+      -- Configure MMIO if available
+      if Has_MMIO then
+         Debug.Print ("Arch.CLINT: Found DTB node " & Node.Name);
+         Base := Get_Property_Unsigned_64 (Node, "reg", 1);
+         Size := Get_Property_Unsigned_64 (Node, "reg", 2);
+         Phys := To_Address (Integer_Address (Base));
+         Virt := Phys;
+         Timebase_Frequency := Get_Property_Unsigned_64 (Node, "timebase-frequency", 1);
+
+         Map_Range (
+            Map            => Kernel_Table,
+            Physical_Start => Phys,
+            Virtual_Start  => Virt,
+            Length         => Storage_Count (Size),
+            Permissions    => (Is_User_Accesible => False,
+                              Can_Read          => True,
+                              Can_Write         => True,
+                              Can_Execute       => False,
+                              Is_Global         => True),
+            Success        => Success,
+            Caching        => Write_Back
+         );
+
+         if not Success then
+            Debug.Print ("Arch.CLINT: MMIO map failed; disabling CLINT");
+            -- Reset global variables to disable CLINT
+            Clint_Base          := Null_Address;
+            Clint_Base_Off      := 0;
+            Has_MMIO            := False;
+            Has_CLINT           := Has_SBI; -- Only SBI remains
+            Timebase_Frequency  := 0;
+            Core_Count          := 0; -- Reset Core_Count
+            return;
+         end if;
+
+         -- Update global variables
+         Clint_Base     := Virt;
+         Clint_Base_Off := Storage_Offset (To_Integer (Virt));
+         Debug.Print ("Arch.CLINT: MMIO mapped at " & Address'Image (Clint_Base));
+
+         -- Ensure CPU.Core_Count is valid before assigning
+         if CPU.Core_Count > 0 then
+            Core_Count := CPU.Core_Count;
+         else
+            Debug.Print ("Arch.CLINT: CPU.Core_Count is invalid; defaulting to 1");
+            Core_Count := 1;
+         end if;
+
+         Debug.Print ("Arch.CLINT: Number of cores = " & Unsigned_64'Image (Core_Count));
+      else
+         Debug.Print ("Arch.CLINT: No DTB node found; Using SBI for timer & IPI");
       end if;
 
-      Base := Get_Property_Unsigned_64 (Node, "reg", 1);
-      Size := Get_Property_Unsigned_64 (Node, "reg", 2);
-      Phys := To_Address (Integer_Address (Base));
-      Virt := Phys;
-      Timebase_Frequency := Arch.DTB.Get_Property_Unsigned_64 (Node,
-        "timebase-frequency", 1);
-
-      Map_Range (
-        Map            => Kernel_Table,
-        Physical_Start => Phys,
-        Virtual_Start  => Virt,
-        Length         => Storage_Count (Size),
-        Permissions    => (Is_User_Accesible => False,
-                          Can_Read          => True,
-                          Can_Write         => False,
-                          Can_Execute       => False,
-                          Is_Global         => True),
-        Success        => Success,
-        Caching        => Write_Back
-      );
-      if not Success then
-         Debug.Print ("Arch.CLINT: MMIO map failed; CLINT disabled");
-         return;
-      end if;
-
-      Clint_Base     := Virt;
-      Clint_Base_Off := Storage_Offset (To_Integer (Virt));
-      Debug.Print ("Arch.CLINT: MMIO mapped at " & Address'Image (Clint_Base));
-
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Exception occurred; disabling CLINT");
+         -- Reset global variables to disable CLINT
+         Clint_Base          := Null_Address;
+         Clint_Base_Off      := 0;
+         Has_MMIO            := False;
+         Has_SBI             := False;
+         Has_CLINT           := False;
+         Timebase_Frequency  := 0;
+         Core_Count          := 0; -- Reset Core_Count
    end Set_CLINT_Configuration;
 
    ----------------------------------------------------------------------------
@@ -121,144 +166,93 @@ package body Arch.CLINT with SPARK_Mode => Off is
         Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
    begin
       pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
-      Debug.Print ("Arch.CLINT: Initializing hart "
-                   & Unsigned_64'Image (Hart_Id));
+      Debug.Print ("Arch.CLINT: Initializing hart " & Unsigned_64'Image (Hart_Id));
 
-      if Probe_Extension (Extension_Ipi) then
+      if Has_SBI then
          Debug.Print ("Arch.CLINT: SBI handles MSIP clear");
          return;
       end if;
 
-      declare
-         MSIP : Unsigned_32 with Address =>
-                  To_Address (Integer_Address (Off));
-      begin
-         MSIP := 0;
-         Debug.Print ("Arch.CLINT: MSIP cleared for hart "
-                      & Unsigned_64'Image (Hart_Id));
-      end;
-   end Initialize_Hart;
-
-   ----------------------------------------------------------------------------
-   --  Software IPIs
-   ----------------------------------------------------------------------------
-   procedure Send_Software_Interrupt (Target_Hart : Unsigned_64) is
-      Mask : constant Unsigned_64 :=
-        Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
-      Off  : Storage_Offset :=
-        Clint_Base_Off + MSIP_Base +
-        Storage_Offset (4 * Integer (Target_Hart));
-   begin
-      pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
-      if Probe_Extension (Extension_Ipi) then
-         Debug.Print ("Arch.CLINT: Sending SBI IPI to hart "
-                      & Unsigned_64'Image (Target_Hart));
-         Send_Ipi (Mask'Address);
-      else
+      if Has_MMIO then
          declare
             MSIP : Unsigned_32 with Address =>
                      To_Address (Integer_Address (Off));
          begin
-            MSIP := 1;
-            Debug.Print ("Arch.CLINT: MSIP set for hart "
-                         & Unsigned_64'Image (Target_Hart));
+            MSIP := 0;
+            Debug.Print ("Arch.CLINT: MSIP cleared for hart " & Unsigned_64'Image (Hart_Id));
          end;
       end if;
-   end Send_Software_Interrupt;
-
-   procedure Clear_Software_Interrupt (Hart_Id : Unsigned_64) is
-      Off : Storage_Offset :=
-        Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
-   begin
-      pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
-      if Probe_Extension (Extension_Ipi) then
-         return;
-      end if;
-      declare
-         MSIP : Unsigned_32 with Address =>
-                  To_Address (Integer_Address (Off));
-      begin
-         MSIP := 0;
-         Debug.Print ("Arch.CLINT: MSIP cleared for hart "
-                      & Unsigned_64'Image (Hart_Id));
-      end;
-   end Clear_Software_Interrupt;
-
-   procedure Send_Fence_Ipi (Target_Hart : Unsigned_64) is
-      Mask : constant Unsigned_64 :=
-        Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
-   begin
-      pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
-      if Probe_Extension (Extension_Fence_Ipi) then
-         Debug.Print ("Arch.CLINT: Sending SBI fence‑IPI to hart "
-                      & Unsigned_64'Image (Target_Hart));
-         Remote_Fence (Mask'Address);
-      else
-         Debug.Print ("Arch.CLINT: Fallback to software IPI for fence");
-         Send_Software_Interrupt (Target_Hart);
-      end if;
-   end Send_Fence_Ipi;
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Exception in Initialize_Hart");
+         if Has_MMIO then
+            declare
+               MSIP : Unsigned_32 with Address =>
+                        To_Address (Integer_Address (Off));
+            begin
+               MSIP := 0;
+               Debug.Print ("Arch.CLINT: MSIP reset to 0 for hart " & Unsigned_64'Image (Hart_Id));
+            end;
+         end if;
+         Lib.Panic.Hard_Panic ("Arch.CLINT: Failed to initialize hart");
+   end Initialize_Hart;
 
    ----------------------------------------------------------------------------
    --  Timer interrupts
    ----------------------------------------------------------------------------
    procedure Set_Timer (Next_Time : Unsigned_64) is
-      Off     : Storage_Offset;
+      Off     : Storage_Offset := 0; -- Initialize to a safe default
       HartInt : Integer := Integer (Read_Hart_ID);
    begin
-      if Probe_Extension (Extension_Timer) then
-         Debug.Print ("Arch.CLINT: Setting SBI timer to "
-                      & Unsigned_64'Image (Next_Time));
-         Set_Timer (Next_Time);
-      else
-         Off := Clint_Base_Off
-                + MTIMECMP_Base
-                + MTIMECMP_Step * Storage_Offset (HartInt);
+      if Has_SBI then
+         Debug.Print ("Arch.CLINT: Setting SBI timer to " & Unsigned_64'Image (Next_Time));
+         Arch.SBI.Set_Timer (Next_Time);
+      elsif Has_MMIO then
+         Off := Clint_Base_Off + MTIMECMP_Base + MTIMECMP_Step * Storage_Offset (HartInt);
          declare
             CMP : Unsigned_64 with Address =>
-                    To_Address (Integer_Address (Off));
+                  To_Address (Integer_Address (Off));
          begin
             CMP := Next_Time;
-            Debug.Print ("Arch.CLINT: MTIMECMP set to "
-                         & Unsigned_64'Image (Next_Time));
+            Debug.Print ("Arch.CLINT: MTIMECMP set to " & Unsigned_64'Image (Next_Time));
          end;
       end if;
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Exception in Set_Timer");
+         if Has_MMIO and Off /= 0 then
+            declare
+               CMP : Unsigned_64 with Address =>
+                     To_Address (Integer_Address (Off));
+            begin
+               CMP := 0;
+               Debug.Print ("Arch.CLINT: MTIMECMP reset to 0");
+            end;
+         end if;
    end Set_Timer;
-
-   procedure Clear_Timer_Interrupt (Hart_Id : Unsigned_64) is
-   begin
-      Debug.Print ("Arch.CLINT: Clear_Timer_Interrupt no‑op for hart "
-                   & Unsigned_64'Image (Hart_Id));
-   end Clear_Timer_Interrupt;
-
-   procedure Disable_Timer_Interrupt is
-   begin
-      Debug.Print ("Arch.CLINT: Disabling timer interrupt (STIE clear)");
-      Asm ("li t0, 0x80", Volatile => True);
-      Asm ("csrc sstatus, t0", Volatile => True);
-   end Disable_Timer_Interrupt;
-
-   procedure Enable_Timer_Interrupt is
-   begin
-      Debug.Print ("Arch.CLINT: Enabling timer interrupt (STIE set)");
-      Asm ("li t0, 0x80", Volatile => True);
-      Asm ("csrs sstatus, t0", Volatile => True);
-   end Enable_Timer_Interrupt;
 
    ----------------------------------------------------------------------------
    --  Read current time (for Reschedule_In and other uses)
    ----------------------------------------------------------------------------
    function Read_Timer return Unsigned_64 is
    begin
-      if Probe_Extension (Extension_Timer) then
+      if Has_SBI then
+         Debug.Print ("Arch.CLINT: Reading timer using SBI");
          return Get_Time;
-      else
+      elsif Has_MMIO then
+         Debug.Print ("Arch.CLINT: Reading timer using MMIO");
          declare
             MTIME : Unsigned_64 with Address =>
-                     To_Address (Integer_Address (MTIME_Base));
+                     To_Address (Integer_Address (Clint_Base_Off + MTIME_Base));
          begin
             return MTIME;
+         exception
+            when others =>
+               Debug.Print ("Arch.CLINT: Exception occurred while reading MMIO timer");
+               return 0; -- Return a default value in case of failure
          end;
+      else
+         return 0; -- No timer available
       end if;
    end Read_Timer;
 

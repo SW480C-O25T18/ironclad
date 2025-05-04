@@ -1,6 +1,6 @@
 --  arch-clint.ads: Specification of Core Local Interruptor (CLINT) utilities.
 --  Copyright (C) 2025 Sean C. Weeks - badrock1983
---  
+--
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
 --  the Free Software Foundation, either version 3 of the License, or
@@ -9,9 +9,10 @@
 --  but WITHOUT ANY WARRANTY; without even the implied warranty of
 --  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
---  
+--
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
+--  along with this program. If not,
+--  see [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 
 with Interfaces;                     use Interfaces;
 with System;                         use System;
@@ -21,9 +22,9 @@ package Arch.CLINT with SPARK_Mode => Off is
    --  Availability: prefer SBI virtualization, fallback to MMIO
    function CLINT_Enabled return Boolean;
 
-   ----------------------------------------------------------------------------
+   -----------------------------------------------------------
    --  Global configuration: map MMIO or rely on SBI
-   ----------------------------------------------------------------------------
+   -----------------------------------------------------------
    procedure Set_CLINT_Configuration;
 
    -----------------------------------------------------------
@@ -41,7 +42,7 @@ package Arch.CLINT with SPARK_Mode => Off is
 
    --  Software local interrupts (IPIs)
    procedure Send_Software_Interrupt (Target_Hart : Unsigned_64);
-   procedure Clear_Software_Interrupt  (Hart_Id      : Unsigned_64);
+   procedure Clear_Software_Interrupt (Hart_Id      : Unsigned_64);
 
    --  Remote fence IPI (for SBI fence-IPI extension)
    procedure Send_Fence_Ipi (Target_Hart : Unsigned_64);
