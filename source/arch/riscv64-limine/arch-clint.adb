@@ -82,15 +82,12 @@ package body Arch.CLINT with SPARK_Mode => Off is
          return;
       end if;
 
-      declare
-         Regs : Unsigned_64_Array (1 .. 3);
-      begin
-         Regs := Get_Property_Unsigned_64 (Node, "reg");
-         Base := Regs (1);
-         Size := Regs (2);
-         Phys := To_Address (Integer_Address (Base));
-         Virt := Phys;
-      end;
+      Base := Get_Property_Unsigned_64 (Node, "reg", 1);
+      Size := Get_Property_Unsigned_64 (Node, "reg", 2);
+      Phys := To_Address (Integer_Address (Base));
+      Virt := Phys;
+      Timebase_Frequency := Arch.DTB.Get_Property_Unsigned_64 (Node,
+        "timebase-frequency", 1);
 
       Map_Range (
         Map            => Kernel_Table,

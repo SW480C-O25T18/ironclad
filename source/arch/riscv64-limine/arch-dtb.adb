@@ -340,4 +340,72 @@ package body Arch.DTB with SPARK_Mode => Off is
          return null;
    end Find_Node_By_Compatible;
 
+   -----------------------------------------------------------------------------
+   -- Fetch a specific indexed value from a property as Unsigned_64
+   -----------------------------------------------------------------------------
+   function Get_Property_Unsigned_64
+     (Node  : DTB_Node_Access;
+      Name  : String;
+      Index : Positive) return Unsigned_64
+   is
+      Prop : DTB_Property_Access;
+   begin
+      -- Find the property by name
+      for I in 0 .. Node.Prop_Count - 1 loop
+         if Node.Properties (I).Name = Name then
+            Prop := Node.Properties (I);
+            exit;
+         end if;
+      end loop;
+
+      if Prop = null then
+         raise Program_Error with "Property '" & Name & "' not found in node.";
+      end if;
+
+      -- Ensure the index is within bounds
+      if Index > Prop.Len then
+         raise Constraint_Error with "Index out of bounds for property '" & Name & "'.";
+      end if;
+
+      -- Return the indexed value
+      return Prop.Value (Index);
+   exception
+      when others =>
+         Arch.Debug.Print ("Get_Property_Unsigned_64: Failed to fetch property '" & Name & "'");
+         raise;
+   end Get_Property_Unsigned_64;
+
+   function Get_Property_Unsigned_64
+     (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array
+   is
+      Prop : DTB_Property_Access := null;
+      Result : Unsigned_64_Array (1 .. 0); -- Default to an empty array
+   begin
+      -- Find the property by name
+      for I in 1 .. Node.Prop_Count loop
+         if Node.Properties(I).Name = Name then
+            Prop := Node.Properties(I);
+            exit;
+         end if;
+      end loop;
+
+      if Prop = null then
+         raise Program_Error with "Property '" & Name & "' not found in node.";
+      end if;
+
+      -- Allocate the result array based on the property length
+      Result := new Unsigned_64_Array(1 .. Prop.Len);
+
+      -- Populate the result array
+      for I in 1 .. Prop.Len loop
+         Result(I) := Prop.Value(I);
+      end loop;
+
+      return Result;
+   exception
+      when others =>
+         Arch.Debug.Print("Get_Property_Unsigned_64: Failed to fetch property '" & Name & "'");
+         raise;
+   end Get_Property_Unsigned_64;
+
 end Arch.DTB;

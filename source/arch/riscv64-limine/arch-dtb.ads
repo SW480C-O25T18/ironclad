@@ -67,6 +67,11 @@ package Arch.DTB with SPARK_Mode => Off is
    function Get_Property_Unsigned_64
      (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array;
    function Find_Node_By_Compatible (Compat : String) return DTB_Node_Access;
+   -- Fetch a specific indexed value from a property as Unsigned_64
+   function Get_Property_Unsigned_64
+     (Node  : DTB_Node_Access;
+      Name  : String;
+      Index : Positive) return Unsigned_64;
 
 private
 
