@@ -25,6 +25,7 @@ with System;                     use System;
 with System.Storage_Elements;    use System.Storage_Elements;
 with Ada.Unchecked_Conversion;   use Ada.Unchecked_Conversion;
 with Arch.Debug;                 use Arch.Debug;
+with Limine;                     use Limine;
 
 package body Arch.DTB with SPARK_Mode => Off is
 
@@ -62,6 +63,17 @@ package body Arch.DTB with SPARK_Mode => Off is
    --  Helper Functions
    -----------------------------------------------------------------------------
 
+   -----------------------------------------------------------------------------
+   --  Helper Function: Check if a string contains a substring
+   -----------------------------------------------------------------------------
+   function Contains_Substring (Str, Sub : String) return Boolean is
+   begin
+      return String'Index (Str, Sub) /= 0;
+   end Contains_Substring;
+
+   -- Forward declaration of Parse_Property
+   procedure Parse_Property (Node : DTB_Node_Access; Pos : in out Address);
+   
    --  Convert 32-bit big-endian to host order
    function BE_To_Host (Val : Unsigned_32) return Unsigned_32 is
       B0, B1, B2, B3 : Unsigned_32;
@@ -114,7 +126,7 @@ package body Arch.DTB with SPARK_Mode => Off is
          Result (Len + 1) := Character'Val (Ptr (Len + 1));
          Len := Len + 1;
       end loop;
-      return Result (1 .. Len);
+      return Result(1 .. Len);
    exception
       when others =>
          Debug.Print ("Read_Null_String: Exception occurred.");
@@ -180,12 +192,14 @@ package body Arch.DTB with SPARK_Mode => Off is
       --  Parse property length and name offset
       Prop.Len := BE_To_Host (Read_BE32 (Pos));
       Pos := Advance (Pos, 4);
-      Prop.Name := Read_Null_String (Strings_Base + BE_To_Host (Read_BE32 (Pos)));
+      Prop.Name := Read_Null_String (
+         Strings_Base + BE_To_Host (Read_BE32 (Pos)));
       Pos := Advance (Pos, 4);
 
       --  Validate property length
       if Prop.Len > 8 then
-         Debug.Print ("Parse_Property: Property length exceeds maximum allowed size.");
+         Debug.Print (
+            "Parse_Property: Property length exceeds maximum allowed size.");
          return;
       end if;
 
@@ -236,16 +250,19 @@ package body Arch.DTB with SPARK_Mode => Off is
 
       -- Calculate base addresses using proper type conversions
       Struct_Base :=
-         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
-         To_Address (Integer (BE_To_Host (HDR.Offset_DT_Struct)));
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Offset_DT_Struct))));
 
       Strings_Base :=
-         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
-         To_Address (Integer (BE_To_Host (HDR.Offset_DT_Strings)));
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Offset_DT_Strings))));
 
       DTB_End :=
-         To_Address (Integer_Address (Limine.DTB_Response.DTB_Addr)) +
-         To_Address (Integer (BE_To_Host (HDR.Size_DT_Struct)));
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Size_DT_Struct))));
 
       -- Debug output for calculated addresses
       Debug.Print ("Init: Struct_Base = " & Address'Image (Struct_Base));
@@ -331,7 +348,7 @@ package body Arch.DTB with SPARK_Mode => Off is
                I).Name = "compatible" then
                declare
                   Prop_Value : constant String :=
-                     String (N.Properties (I).Value);
+                     String'Value (N.Properties (I).Value (1 .. N.Properties (I).Len));
                begin
                   if Contains_Substring (Prop_Value, Compat) then
                      return N;
@@ -434,17 +451,17 @@ package body Arch.DTB with SPARK_Mode => Off is
    end Get_Property_Unsigned_64;
 
    function Get_Property_Unsigned_64
-     (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array
+      (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array
    is
       Prop : DTB_Property_Access := null;
    begin
-      --  Precondition: Ensure Node is not null
+      -- Precondition: Ensure Node is not null
       if Node = null then
          Debug.Print ("Get_Property_Unsigned_64: Node is null.");
-         return Unsigned_64_Array'(1 .. 0 => Unsigned_64(0));
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)];
       end if;
 
-      --  Find the property by name
+      -- Find the property by name
       for I in 1 .. Node.Prop_Count loop
          if Node.Properties (I).Name = Name then
             Prop := Node.Properties (I);
@@ -452,14 +469,14 @@ package body Arch.DTB with SPARK_Mode => Off is
          end if;
       end loop;
 
-      --  Handle missing property
+      -- Handle missing property
       if Prop = null then
          Debug.Print ("Get_Property_Unsigned_64: Property '" &
          Name & "' not found in node.");
-         return Unsigned_64_Array'(1 .. 0 => Unsigned_64(0));
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)];
       end if;
 
-      --  Allocate and populate the result array
+      -- Allocate and populate the result array
       declare
          Result : Unsigned_64_Array (1 .. Prop.Len) := [others => 0];
       begin
@@ -473,7 +490,7 @@ package body Arch.DTB with SPARK_Mode => Off is
       when others =>
          Debug.Print ("Get_Property_Unsigned_64: " &
          "Exception occurred while fetching property '" & Name & "'.");
-         return (1 .. 0 => 0); -- Return an empty array
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)]; -- Return an empty array
    end Get_Property_Unsigned_64;
 
 end Arch.DTB;
