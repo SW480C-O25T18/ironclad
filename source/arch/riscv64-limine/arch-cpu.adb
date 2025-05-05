@@ -186,7 +186,8 @@ package body Arch.CPU with SPARK_Mode => Off is
    begin
       Asm ("csrr %0, %1",
            Outputs => Unsigned_64'Asm_Output ("=r", Result),
-           Inputs  => Unsigned_32'Asm_Input ("r", CSR_ID));
+           Inputs  => Unsigned_32'Asm_Input ("r", CSR_ID),
+           Volatile => True);
       return Result;
    exception
       when Constraint_Error =>
@@ -210,6 +211,7 @@ package body Arch.CPU with SPARK_Mode => Off is
    -- Get the BSP hart identifier
    -------------------------------------------------------------------
    function Get_BSP_Hart return U32 is
+      pragma Volatile_Function;
    begin
       return U32 (Core_Locals (1).Hart_ID);
    exception
