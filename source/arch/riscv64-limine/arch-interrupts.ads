@@ -16,9 +16,9 @@
 
 with Interfaces;        use Interfaces;
 with System;            use System;
-with Arch.CLINT;      use Arch.CLINT;
-with Arch.PLIC;       use Arch.PLIC;
-with Arch.DTB;        use Arch.DTB;
+with Arch.CLINT;        use Arch.CLINT;
+with Arch.PLIC;         use Arch.PLIC;
+with Arch.DTB;          use Arch.DTB;
 
 package Arch.Interrupts with SPARK_Mode => Off is
 
@@ -26,13 +26,15 @@ package Arch.Interrupts with SPARK_Mode => Off is
    --  Symbolic scause codes and interrupt bit mask
    ---------------------------------------------------------------------------
    Interrupt_Bit         : constant Unsigned_64 :=
-                              Interfaces.Shift_Left (Unsigned_64 (1), 63);
+                              Shift_Left (Unsigned_64 (1), 63);
    CLINT_SW_INT_CODE     : constant Unsigned_64 := Interrupt_Bit + 3;
    CLINT_TIMER_INT_CODE1 : constant Unsigned_64 := Interrupt_Bit + 5;
    CLINT_TIMER_INT_CODE2 : constant Unsigned_64 := Interrupt_Bit + 7;
    SYSCALL_INT_CODE      : constant Unsigned_64 := 8;  -- exception (ecall)
    PLIC_EXT_INT_CODE1    : constant Unsigned_64 := Interrupt_Bit + 9;
    PLIC_EXT_INT_CODE2    : constant Unsigned_64 := Interrupt_Bit + 11;
+
+   Lazy_FP_Fault_Code    : constant Unsigned_64 := 2;
 
    ---------------------------------------------------------------------------
    --  Decode Functions
@@ -48,7 +50,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    ---------------------------------------------------------------------------
    --  Thread Control Block context offset (bytes)
    ---------------------------------------------------------------------------
-   TCB_CONTEXT_OFFSET : constant Natural := 80;
+   TCB_CONTEXT_OFFSET : constant Natural := 368;
    function Get_TCB_OFFSET return Unsigned_64;
    pragma Inline (Get_TCB_OFFSET);
    --  Byte offset of saved Frame in the TCB.
@@ -63,12 +65,12 @@ package Arch.Interrupts with SPARK_Mode => Off is
    --  Interrupt Frame Layout
    ---------------------------------------------------------------------------
    type Frame is record
-      --  Caller-saved registers
+      --  Caller‑saved registers
       x1_ra,  x4_tp,  x5_t0,  x6_t1,  x7_t2   : Unsigned_64;
       x10_a0, x11_a1, x12_a2, x13_a3          : Unsigned_64;
       x14_a4, x15_a5, x16_a6, x17_a7          : Unsigned_64;
       x28_t3, x29_t4, x30_t5, x31_t6          : Unsigned_64;
-      --  Callee-saved registers
+      --  Callee‑saved registers
       x2_sp, x3_gp, x8_s0, x9_s1              : Unsigned_64;
       x18_s2, x19_s3, x20_s4, x21_s5          : Unsigned_64;
       x22_s6, x23_s7, x24_s8, x25_s9          : Unsigned_64;
@@ -79,6 +81,10 @@ package Arch.Interrupts with SPARK_Mode => Off is
       --  Lazy floating-point context pointer
       FP_Context_Ptr : System.Address := System.Null_Address;
    end record with Pack;
+   type Frame_Ptr is access all Frame;
+   for Frame_Ptr'Size use Frame'Size;
+   for Frame'Alignment use 8;
+   for Frame'Address use 8;
 
    ---------------------------------------------------------------------------
    --  IRQ Handlers Table
@@ -139,7 +145,7 @@ package Arch.Interrupts with SPARK_Mode => Off is
    procedure Handle_Trap
      (Frame_Ptr : access Frame)
      with Pre => Frame_Ptr /= null and then Frame_Ptr.sepc mod 4 = 0;
-     pragma Export (C, Handle_Trap, "Handle_Trap");
+   pragma Export (C, Handle_Trap, "Handle_Trap");
 
    ---------------------------------------------------------------------------
    --  Device-tree IRQ Convenience
@@ -148,11 +154,5 @@ package Arch.Interrupts with SPARK_Mode => Off is
      (Node    : access DTB_Node_Access;
       Handler : IRQ_Handler)
      with Pre => Node /= null and Handler /= null;
-
-   ---------------------------------------------------------------------------
-   --  Floating-point Context Management
-   ---------------------------------------------------------------------------
-   procedure Save_FP_Context    (Frame_Ptr : in out Frame);
-   procedure Restore_FP_Context (Frame_Ptr : in out Frame);
 
 end Arch.Interrupts;

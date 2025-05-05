@@ -1,68 +1,101 @@
---  arch-sbi.ads: Specification of Supervisor Binary Interface (SBI) utilities.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  arch-sbi.ads: Supervisor Binary Interface (SBI) wrapper for riscv64-limine
+--  Copyright (C) 2025 Sean Weeks
 --
---  This program is free software: you can redistribute it and/or modify
---  it under the terms of the GNU General Public License as published by
---  the Free Software Foundation, either version 3 of the License, or
---  (at your option) any later version.
---
---  This program is distributed in the hope that it will be useful,
---  but WITHOUT ANY WARRANTY; without even the implied warranty of
---  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
---  GNU General Public License for more details.
---
---  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+--  This file is part of Ironclad.
+--  Distributed under the terms of the GNU GPL v3 or later.
 
-with Interfaces; use Interfaces;
-with System;     --  for System.Address
+with Interfaces;
+with System;
+with Arch.Debug;
+with Lib.Panic;
 
-package Arch.SBI with SPARK_Mode => Off is
+package Arch.SBI is
+   pragma Pure;
 
-   ------------------------------------------------------------------------
-   --  Types
-   ------------------------------------------------------------------------
-   type Extension_Id is new Unsigned_64;
-     --  Encodes the SBI extension ID (legacy numeric or string‐based).
+   subtype U64 is Interfaces.Unsigned_64;
+   subtype U32 is Interfaces.Unsigned_32;
 
-   ------------------------------------------------------------------------
-   --  Known SBI Extension IDs
-   ------------------------------------------------------------------------
-   Extension_Timer       : constant Extension_Id := 16#0000_0000#;
-   Extension_Ipi         : constant Extension_Id := 16#0000_0004#;
+   ----------------------------------------------------------------
+   --  Base Extension (EID = 0x10) :contentReference[oaicite:1]{index=1}
+   ----------------------------------------------------------------
 
-   --  v0.2+ string‐based IDs:
-   Extension_Timer_Str   : constant Extension_Id := 16#5449_4D45#; -- "TIME"
-   Extension_Ipi_Str     : constant Extension_Id := 16#7352_4950#; -- "sRIP"
+   function  Get_Spec_Version return U64;
+     -- Returns (major << 24) | (minor << 16) | patch.
 
-   Extension_Fence_Ipi   : constant Extension_Id := Extension_Ipi_Str;
-     --  Advanced fence‐IPI extension
+   function  Probe_Extension (EID : U64) return Boolean;
+     -- Returns True if that extension ID is implemented.
 
-   ------------------------------------------------------------------------
-   --  Probe Extension
-   ------------------------------------------------------------------------
-   function Probe_Extension
-     (Ext : Extension_Id) return Boolean;
-     --  Returns True if the specified SBI extension is supported.
+   ----------------------------------------------------------------
+   --  Legacy Console Extension (EID = 0x01) 
+   ----------------------------------------------------------------
 
-   ------------------------------------------------------------------------
-   --  Timer Management
-   ------------------------------------------------------------------------
-   procedure Set_Timer (Next_Time : Unsigned_64);
-     --  Request a timer interrupt at the given absolute time.
-   function Get_Time return Unsigned_64;
-     --  Query the current time (SBI timer extension).
+   procedure Console_Putchar (Ch : Character);
+     -- sbi_console_putchar; blocks or drops char.
 
-   ------------------------------------------------------------------------
-   --  Inter‐Processor Interrupts (IPIs)
-   ------------------------------------------------------------------------
-   procedure Send_Ipi (Hart_Mask_Ptr : System.Address);
-     --  Sends software interrupts to harts specified in hart‐mask.
+   function  Console_Getchar return Integer;
+     -- sbi_console_getchar; returns -1 if no char.
 
-   ------------------------------------------------------------------------
-   --  Remote Fence (e.g., TLB shootdown)
-   ------------------------------------------------------------------------
-   procedure Remote_Fence (Hart_Mask_Ptr : System.Address);
-     --  Sends a remote fence IPI to harts specified in hart‐mask.
+   ----------------------------------------------------------------
+   --  Timer Extension (EID = 0x00) :contentReference[oaicite:3]{index=3}
+   ----------------------------------------------------------------
+
+   procedure Set_Timer (Time_Value : U64);
+     -- sbi_set_timer(Time_Value): schedule next timer IRQ.
+
+   ----------------------------------------------------------------
+   --  IPI Extension (EID = 0x03) :contentReference[oaicite:4]{index=4}
+   ----------------------------------------------------------------
+
+   procedure Send_IPI  (Hart_Mask : U64);
+   procedure Clear_IPI (Hart_Mask : U64);
+     -- Send/clear software IPIs.
+
+   ----------------------------------------------------------------
+   --  Remote Fence Extension (RFENCE, EID = 0x52464E43) 
+   ----------------------------------------------------------------
+
+   procedure Remote_Fence_I    (Hart_Mask, Hart_Mask_Base : U64);
+   procedure Remote_Sfence_VMA (Hart_Mask, Hart_Mask_Base : U64;
+                               Addr, Size               : U64);
+   procedure Remote_Sfence_VMA_ASID
+     (Hart_Mask, Hart_Mask_Base : U64;
+      Addr, Size, ASID         : U64);
+   -- Plus HFENCE.GVMA and HFENCE.VVMA variants per spec.
+
+   ----------------------------------------------------------------
+   --  Hart State Management (HSM, EID = 0x48534D) 
+   ----------------------------------------------------------------
+
+   procedure Hart_Start   (HartID : U64; Start_Addr, Opaque : U64);
+   procedure Hart_Stop    (HartID : U64);
+   function  Hart_Get_Status (HartID : U64) return U64;
+   procedure Hart_Suspend   (Suspend_Type, Resume_Addr, Opaque : U64);
+
+   ----------------------------------------------------------------
+   --  System Reset Extension (EID = 0x08) 
+   ----------------------------------------------------------------
+
+   procedure Shutdown;
+
+   ----------------------------------------------------------------
+   --  Performance Monitoring Unit (PMU, EID = 0x504D55) 
+   ----------------------------------------------------------------
+
+   procedure Pmu_Reset (Counter_ID : U64);
+   procedure Pmu_Start (Counter_ID : U64);
+   procedure Pmu_Stop  (Counter_ID : U64);
+   function  Pmu_Read  (Counter_ID : U64) return U64;
+
+   ----------------------------------------------------------------
+   --  System Suspend Extension (EID = 0x53555350) :contentReference[oaicite:9]{index=9}
+   ----------------------------------------------------------------
+
+   procedure System_Suspend (Flags : U64);
+
+private
+   -- The low-level ECALL wrapper; not callable by clients.
+   function SBIEcall
+     (ExtID, FunID : U64;
+      Arg0, Arg1, Arg2 : U64 := 0) return U64;
 
 end Arch.SBI;

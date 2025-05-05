@@ -68,14 +68,17 @@ package body Devices.UART with SPARK_Mode => Off is
    type Byte_Register_Ptr is access all Byte_Register_Rec
       with Convention => C;
 
-   function Address_To_Byte_Register_Ptr is new Ada.Unchecked_Conversion
-     (System.Address, Byte_Register_Ptr);
+   function Address_To_Byte_Register_Ptr (
+      Addr : System.Address) return Byte_Register_Ptr is
+   begin
+      return Byte_Register_Ptr (Addr);
+   end Address_To_Byte_Register_Ptr;
 
    function To_ByteRegister_Ptr (Offset : Storage_Offset)
       return Byte_Register_Ptr is
       Addr : constant System.Address := To_Address (UART_Base) + Offset;
    begin
-      return Address_To_Byte_Register_Ptr (Addr);
+      return Byte_Register_Ptr (Addr);
    end To_ByteRegister_Ptr;
 
    ----------------------------------------------------------------------------
@@ -181,7 +184,8 @@ package body Devices.UART with SPARK_Mode => Off is
          Ch := Read_UART0;
          Last := Last + 1;
          Buffer (Last) := Ch;
-         exit when Ch = ASCII.LF or else Ch = ASCII.CR;
+         exit when Ch = Character'Val(16#0A#) or
+            else Ch = Character'Val(16#0D#);
       end loop;
       Line := Buffer (1 .. Last);
    end Read_UART0_Line;

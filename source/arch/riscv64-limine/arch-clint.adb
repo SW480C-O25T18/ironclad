@@ -39,7 +39,6 @@ package body Arch.CLINT with SPARK_Mode => Off is
    ----------------------------------------------------------------------------
    Clint_Base           : Address         := Null_Address;
    Clint_Base_Off       : Storage_Offset  := 0;
-   Timebase_Frequency   : Unsigned_64     := 0;
    Core_Count           : Unsigned_64     := 0; -- Initialize to 0
    Has_SBI             : Boolean         := False;
    Has_MMIO            : Boolean         := False;
@@ -134,7 +133,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
 
          -- Ensure CPU.Core_Count is valid before assigning
          if CPU.Core_Count > 0 then
-            Core_Count := CPU.Core_Count;
+            Core_Count := Unsigned_64(CPU.Core_Count);
          else
             Debug.Print ("Arch.CLINT: CPU.Core_Count is invalid; defaulting to 1");
             Core_Count := 1;
@@ -255,5 +254,183 @@ package body Arch.CLINT with SPARK_Mode => Off is
          return 0; -- No timer available
       end if;
    end Read_Timer;
+
+   ----------------------------------------------------------------------------
+   --  Send a software interrupt to a specific hart
+   ----------------------------------------------------------------------------
+   procedure Send_Software_Interrupt (Hart_Id : Unsigned_64) is
+      Off : Storage_Offset :=
+        Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
+   begin
+      pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
+      Debug.Print ("Arch.CLINT: Sending software interrupt to hart " & Unsigned_64'Image (Hart_Id));
+
+      if Has_MMIO then
+         declare
+            MSIP : Unsigned_32 with Address =>
+                     To_Address (Integer_Address (Off));
+         begin
+            MSIP := 1;
+         end;
+      end if;
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Exception in Send_Software_Interrupt");
+
+         -- Attempt to reset the MSIP register to a safe state
+         if Has_MMIO then
+            declare
+               MSIP : Unsigned_32 with Address =>
+                        To_Address (Integer_Address (Off));
+            begin
+               -- Clear the MSIP register to ensure no pending interrupts
+               MSIP := 0;
+               Debug.Print (
+                  "Arch.CLINT: MSIP cleared to recover from exception");
+            exception
+               when others =>
+                  Debug.Print (
+                     "Arch.CLINT: Failed to reset MSIP during recovery");
+            end;
+         end if;
+
+         -- Log the failure and notify the caller
+         Debug.Print (
+            "Arch.CLINT: Recovery logic executed; " &
+            "unable to send software interrupt");
+         return; -- Gracefully exit the procedure without halting the system
+   end Send_Software_Interrupt;
+
+   ----------------------------------------------------------------------------
+   --  Clear a software interrupt for a specific hart
+   ----------------------------------------------------------------------------
+   procedure Clear_Software_Interrupt (Hart_Id : Unsigned_64) is
+      Off : Storage_Offset :=
+        Clint_Base_Off + MSIP_Base + Storage_Offset (4 * Integer (Hart_Id));
+   begin
+      pragma Assert (Hart_Id < Unsigned_64 (Core_Count));
+      Debug.Print ("Arch.CLINT: Clearing software interrupt for hart " &
+         Unsigned_64'Image (Hart_Id));
+      
+      if Has_SBI then
+         Debug.Print ("Arch.CLINT: Using SBI to clear MSIP for hart " & Unsigned_64'Image (Hart_Id));
+         Arch.SBI.Clear_IPI (Hart_Id);
+         return;
+      end if;
+
+      if Has_MMIO then
+         declare
+            MSIP : Unsigned_32 with Address =>
+                     To_Address (Integer_Address (Off));
+         begin
+            MSIP := 0;
+         end;
+      end if;
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Exception in Clear_Software_Interrupt");
+
+         -- Attempt to check and reset the MSIP register to a safe state
+         if Has_MMIO then
+            declare
+               MSIP : Unsigned_32 with Address =>
+                        To_Address (Integer_Address (Off));
+            begin
+               -- Check if the MSIP register is already cleared
+               if MSIP = 0 then
+                  Debug.Print (
+                     "Arch.CLINT: MSIP already cleared, no recovery needed.");
+                     return;
+               else
+                  -- Clear the MSIP register to ensure no pending interrupts
+                  MSIP := 0;
+                  Debug.Print (
+                     "Arch.CLINT: MSIP cleared to recover from exception");
+                     return;
+               end if;
+            exception
+               when others =>
+                  Debug.Print (
+                     "Arch.CLINT: Failed to reset MSIP during recovery");
+                  -- Log the failure and notify the caller
+                  Debug.Print (
+                     "Arch.CLINT: Recovery logic executed; " &
+                     "unable to clear software interrupt");
+                  -- Gracefully exit the procedure without halting the system
+                  return;
+            end;
+         end if;
+   end Clear_Software_Interrupt;
+
+   ----------------------------------------------------------------------------
+   --  Send a fence IPI to synchronize instruction caches
+   ----------------------------------------------------------------------------
+   procedure Send_Fence_Ipi (Target_Hart : Unsigned_64) is
+      Mask : constant Unsigned_64 :=
+        Shift_Left (Unsigned_64 (1), Integer (Target_Hart));
+   begin
+      pragma Assert (Target_Hart < Unsigned_64 (Core_Count));
+      if Probe_Extension (Extension_Fence_Ipi) then
+         Debug.Print ("Arch.CLINT: Sending SBI fence‑IPI to hart "
+                      & Unsigned_64'Image (Target_Hart));
+         Remote_Fence (Mask'Address);
+      else
+         Debug.Print ("Arch.CLINT: Fallback to software IPI for fence");
+         Send_Software_Interrupt (Target_Hart);
+      end if;
+   exception
+      when others =>
+         Debug.Print ("Arch.CLINT: Failed to send fence IPI to hart "
+                      & Unsigned_64'Image (Target_Hart));
+         -- Attempt fallback to software IPI
+         Debug.Print ("Arch.CLINT: Retrying with software IPI");
+         begin
+            Send_Software_Interrupt (Target_Hart);
+         exception
+            when others =>
+               Debug.Print (
+                  "Arch.CLINT: Fallback to software IPI also failed for hart "
+                  & Unsigned_64'Image (Target_Hart));
+               Lib.Panic.Hard_Panic ("Arch.CLINT: Unable to send fence IPI");
+         end;
+   end Send_Fence_Ipi;
+
+   ----------------------------------------------------------------------------
+   --  Disable timer interrupt for the current hart
+   ----------------------------------------------------------------------------
+   procedure Disable_Timer_Interrupt is
+   begin
+      Debug.Print ("Arch.CLINT: Disabling timer interrupt (STIE clear)");
+      begin
+         -- Attempt to clear the STIE bit in the sstatus CSR
+         Asm ("li t0, 0x80", Volatile => True);
+         Asm ("csrc sstatus, t0", Volatile => True);
+         Debug.Print ("Arch.CLINT: Timer interrupt successfully disabled");
+      exception
+         when others =>
+            -- Log the error and handle the exception gracefully
+            Debug.Print ("Arch.CLINT: Exception occurred while disabling timer interrupt");
+            Debug.Print ("Arch.CLINT: Timer interrupt may not have been disabled");
+      end;
+   end Disable_Timer_Interrupt;
+
+   ----------------------------------------------------------------------------
+   --  Enable timer interrupt for the current hart
+   ----------------------------------------------------------------------------
+   procedure Enable_Timer_Interrupt is
+   begin
+      Debug.Print ("Arch.CLINT: Enabling timer interrupt (STIE set)");
+      begin
+         -- Attempt to set the STIE bit in the sstatus CSR
+         Asm ("li t0, 0x80", Volatile => True);
+         Asm ("csrs sstatus, t0", Volatile => True);
+         Debug.Print ("Arch.CLINT: Timer interrupt successfully enabled");
+      exception
+         when others =>
+            -- Log the error and handle the exception gracefully
+            Debug.Print ("Arch.CLINT: Exception occurred while enabling timer interrupt");
+            Debug.Print ("Arch.CLINT: Timer interrupt may not have been enabled");
+      end;
+   end Enable_Timer_Interrupt;
 
 end Arch.CLINT;
