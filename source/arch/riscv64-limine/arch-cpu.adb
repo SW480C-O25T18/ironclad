@@ -14,7 +14,7 @@
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+--  along with Ironclad.  If not, see <http://www.gnu.org/licenses/>.
 
 with Arch.Debug;
 with System;              use System;
@@ -31,90 +31,62 @@ package body Arch.CPU with SPARK_Mode => Off is
    -- and to reinterpret any Address as Unsigned_64 for asm inputs.
    -------------------------------------------------------------------
    type SMP_Response_Ptr is access all Limine.RISCV64_SMP_Response;
-   function Addr_To_SMP_Response is
-   new Ada.Unchecked_Conversion (
-      Source => System.Address,
-      Target => SMP_Response_Ptr);
+   function Addr_To_SMP_Response is new Ada.Unchecked_Conversion (
+     Source => System.Address,
+     Target => SMP_Response_Ptr
+   );
 
-   function Addr_To_U64 is
-     new Ada.Unchecked_Conversion (
-       Source => System.Address,
-       Target => Unsigned_64
-     );
+   function Addr_To_U64 is new Ada.Unchecked_Conversion (
+     Source => System.Address,
+     Target => Unsigned_64
+   );
 
    -------------------------------------------------------------------
    -- SMP_Request: tell Limine we want SMP info.
    -------------------------------------------------------------------
    SMP_Request : Limine.SMP_Request
-      with Export, Async_Writers;
+     with Export, Async_Writers;
 
    -------------------------------------------------------------------
    -- Init_Cores: ask Limine for hart count and wake them.
    -------------------------------------------------------------------
    procedure Init_Cores is
       BSP_Hart_ID : Unsigned_64;
-      Idx         : Natural := 2;
       Response    : Limine.RISCV64_SMP_Response;
    begin
       Arch.Debug.Print ("Init_Cores: Starting core initialization...");
-
-      -- Properly initialize the request record
       SMP_Request.Base.ID       := Limine.SMP_ID;
       SMP_Request.Base.Revision := 0;
       SMP_Request.Base.Response := Null_Address;
       SMP_Request.Flags         := 0;
 
-      Arch.Debug.Print ("Init_Cores: Sending SMP request to Limine...");
       if SMP_Request.Base.Response = Null_Address then
          Lib.Panic.Hard_Panic ("Init_Cores: Limine SMP request failed.");
       end if;
 
-      -- Reinterpret the returned pointer as our response record:
-      Response := Addr_To_SMP_Response (SMP_Request.Base.Response).all;
+      Response := Addr_To_SMP_Response (
+                     SMP_Request.Base.Response).all;
 
-      Arch.Debug.Print ("Init_Cores: Received SMP response from Limine.");
-      Core_Count := Natural (Response.CPU_Count);
-      Arch.Debug.Print ("Init_Cores: Detected " & Core_Count'Image & " cores.");
-
+      Core_Count := Positive (Response.CPU_Count);
       BSP_Hart_ID := Response.BSP_Hart_ID;
-      Arch.Debug.Print ("Init_Cores: BSP Hart ID is " & BSP_Hart_ID'Image);
 
-      -- Allocate per-core locals:
       Core_Locals := new Core_Local_Arr (1 .. Core_Count);
+      Init_Common (1, U32 (BSP_Hart_ID), 0);
 
-      -- Initialize BSP:
-      Arch.Debug.Print ("Init_Cores: Initializing BSP (Core 1)...");
-      Init_Common (1, BSP_Hart_ID);
-
-      -- Kick off secondary harts:
       if Core_Count > 1 then
          declare
             CPUs : Limine.RISCV64_CPU_Info_Arr (1 .. Response.CPU_Count)
                with Import, Address => Response.CPUs;
          begin
             for Info of CPUs loop
-               Arch.Debug.Print ("Init_Cores: Initializing core "
-                  & Info.Extra_Arg'Image & " with Hart ID "
-                  & Info.Hart_ID'Image);
-               Init_Common (Natural (Info.Extra_Arg), Info.Hart_ID);
+               Init_Common (Natural (Info.Extra_Arg), Info.Hart_ID, 0);
             end loop;
          end;
       end if;
-
-      Arch.Debug.Print ("Init_Cores: All cores initialized successfully.");
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Init_Cores: Constraint_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Cores: Constraint_Error during initialization.");
-      when Program_Error =>
-         Arch.Debug.Print ("Init_Cores: Program_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Cores: Program_Error during initialization.");
-      when Storage_Error =>
-         Arch.Debug.Print ("Init_Cores: Storage_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Cores: Storage_Error during initialization.");
       when others =>
-         Arch.Debug.Print ("Init_Cores: Unknown exception encountered.");
-         Lib.Panic.Hard_Panic ("Init_Cores: Unknown exception during initialization.");
+         Arch.Debug.Print ("Init_Cores: exception encountered.");
+         Lib.Panic.Hard_Panic ("Init_Cores exception");
    end Init_Cores;
 
    -------------------------------------------------------------------
@@ -123,61 +95,32 @@ package body Arch.CPU with SPARK_Mode => Off is
    procedure Core_Bootstrap
      (Info : access Limine.RISCV64_SMP_CPU_Info) is
    begin
-      Arch.Debug.Print ("Core_Bootstrap: Core " & Info.Extra_Arg'Image
-         & " is booting with Hart ID " & Info.Hart_ID'Image);
-      Init_Common (Natural (Info.Extra_Arg), Info.Hart_ID);
-      Arch.Debug.Print ("Core_Bootstrap: Core " & Info.Extra_Arg'Image
-         & " initialized successfully.");
+      Init_Common (Natural (Info.Extra_Arg), Info.Hart_ID, 0);
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Core_Bootstrap: Constraint_Error encountered.");
-         Lib.Panic.Hard_Panic ("Core_Bootstrap: Constraint_Error during core bootstrap.");
-      when Program_Error =>
-         Arch.Debug.Print ("Core_Bootstrap: Program_Error encountered.");
-         Lib.Panic.Hard_Panic ("Core_Bootstrap: Program_Error during core bootstrap.");
-      when Storage_Error =>
-         Arch.Debug.Print ("Core_Bootstrap: Storage_Error encountered.");
-         Lib.Panic.Hard_Panic ("Core_Bootstrap: Storage_Error during core bootstrap.");
       when others =>
-         Arch.Debug.Print ("Core_Bootstrap: Unknown exception encountered.");
-         Lib.Panic.Hard_Panic ("Core_Bootstrap: Unknown exception during core bootstrap.");
+         Lib.Panic.Hard_Panic ("Core_Bootstrap exception");
    end Core_Bootstrap;
 
    -------------------------------------------------------------------
    -- Shared per-core initialization.
    -------------------------------------------------------------------
    procedure Init_Common
-     (Core_Number : Positive;
-      Hart_ID     : Unsigned_64) is
+     (Total_Harts : U32;
+      BSP_Hart    : U32) is
    begin
-      Arch.Debug.Print ("Init_Common: Initializing core " & Core_Number'Image
-         & " with Hart ID " & Hart_ID'Image);
-
-      Core_Locals (Core_Number) := (
-         Self            => Core_Locals(Core_Number)'Access,
+      Core_Locals (Positive (Self_Hart) + 1) := (
+         Self            => Core_Locals (1)'Access,
          Kernel_Stack    => 0,
          User_Stack      => 0,
-         Number          => Core_Number,
-         Hart_ID         => Hart_ID,
+         Number          => Positive (Self_Hart) + 1,
+         Hart_ID         => U64 (Self_Hart),
+         Scratch         => null,
          Current_Thread  => Scheduler.Error_TID,
          Current_Process => Userland.Process.Error_PID
       );
-
-      Arch.Debug.Print ("Init_Common: Core " & Core_Number'Image
-         & " initialized successfully.");
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Init_Common: Constraint_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Common: Constraint_Error during core initialization.");
-      when Program_Error =>
-         Arch.Debug.Print ("Init_Common: Program_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Common: Program_Error during core initialization.");
-      when Storage_Error =>
-         Arch.Debug.Print ("Init_Common: Storage_Error encountered.");
-         Lib.Panic.Hard_Panic ("Init_Common: Storage_Error during core initialization.");
       when others =>
-         Arch.Debug.Print ("Init_Common: Unknown exception encountered.");
-         Lib.Panic.Hard_Panic ("Init_Common: Unknown exception during core initialization.");
+         Lib.Panic.Hard_Panic ("Init_Common exception");
    end Init_Common;
 
    -------------------------------------------------------------------
@@ -185,49 +128,93 @@ package body Arch.CPU with SPARK_Mode => Off is
    -------------------------------------------------------------------
    procedure Set_Trap_Vector is
    begin
-      Arch.Debug.Print ("Set_Trap_Vector: Setting trap vector...");
       Asm ("csrw stvec, %0",
            Inputs => Unsigned_64'Asm_Input ("r", Addr_To_U64 (trap_entry'Address)));
-      Arch.Debug.Print ("Set_Trap_Vector: Trap vector set successfully.");
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Set_Trap_Vector: Constraint_Error encountered.");
-         Lib.Panic.Hard_Panic ("Set_Trap_Vector: Constraint_Error during trap vector setup.");
-      when Program_Error =>
-         Arch.Debug.Print ("Set_Trap_Vector: Program_Error encountered.");
-         Lib.Panic.Hard_Panic ("Set_Trap_Vector: Program_Error during trap vector setup.");
-      when Storage_Error =>
-         Arch.Debug.Print ("Set_Trap_Vector: Storage_Error encountered.");
-         Lib.Panic.Hard_Panic ("Set_Trap_Vector: Storage_Error during trap vector setup.");
       when others =>
-         Arch.Debug.Print ("Set_Trap_Vector: Unknown exception encountered.");
-         Lib.Panic.Hard_Panic ("Set_Trap_Vector: Unknown exception during trap vector setup.");
+         Lib.Panic.Hard_Panic ("Set_Trap_Vector exception");
    end Set_Trap_Vector;
 
    -------------------------------------------------------------------
    -- Read the hardware hart-ID (mhartid CSR).
    -------------------------------------------------------------------
-   function Read_Hart_ID return Unsigned_64 is
-      ID : Unsigned_64;
+   function Read_Hart_ID return U64 is
+      ID : U64;
    begin
-      Arch.Debug.Print ("Read_Hart_ID: Reading Hart ID...");
       Asm ("csrr %0, mhartid",
            Outputs => Unsigned_64'Asm_Output ("=r", ID));
-      Arch.Debug.Print ("Read_Hart_ID: Hart ID is " & ID'Image);
       return ID;
    exception
-      when Constraint_Error =>
-         Arch.Debug.Print ("Read_Hart_ID: Constraint_Error encountered.");
-         Lib.Panic.Hard_Panic ("Read_Hart_ID: Constraint_Error during Hart ID read.");
-      when Program_Error =>
-         Arch.Debug.Print ("Read_Hart_ID: Program_Error encountered.");
-         Lib.Panic.Hard_Panic ("Read_Hart_ID: Program_Error during Hart ID read.");
-      when Storage_Error =>
-         Arch.Debug.Print ("Read_Hart_ID: Storage_Error encountered.");
-         Lib.Panic.Hard_Panic ("Read_Hart_ID: Storage_Error during Hart ID read.");
       when others =>
-         Arch.Debug.Print ("Read_Hart_ID: Unknown exception encountered.");
-         Lib.Panic.Hard_Panic ("Read_Hart_ID: Unknown exception during Hart ID read.");
+         Lib.Panic.Hard_Panic ("Read_Hart_ID exception");
    end Read_Hart_ID;
+
+   -------------------------------------------------------------------
+   -- Get the current hart ID from mhartid CSR
+   -------------------------------------------------------------------
+   function Self_Hart return U32 is
+   begin
+      return U32 (Read_Hart_ID);
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("Self_Hart exception");
+   end Self_Hart;
+
+   -------------------------------------------------------------------
+   -- Get access to this hart's per-core local storage
+   -------------------------------------------------------------------
+   function Get_Local return access Core_Local is
+      Addr : U64;
+      Ptr  : System.Address;
+   begin
+      Asm ("csrr %0, tp",
+           Outputs => Unsigned_64'Asm_Output ("=r", Addr));
+      Ptr := System.Storage_Elements.Integer_To_Address (Addr);
+      return Core_Local_Arr_Acc (Ptr).all'Access;
+   exception
+      when others =>
+         Arch.Debug.Print ("[ERROR] Get_Local failed: Invalid CSR tp");
+         Arch.Debug.Print ("CSR tp=" & U64'Image (Addr));
+         Lib.Panic.Hard_Panic ("Get_Local exception");
+   end Get_Local;
+
+   -------------------------------------------------------------------
+   -- Read arbitrary CSR by ID
+   -------------------------------------------------------------------
+   function Read_CSR (CSR_ID : U32) return U64 is
+      Result : U64;
+   begin
+      Asm ("csrr %0, %1",
+           Outputs => Unsigned_64'Asm_Output ("=r", Result),
+           Inputs  => Unsigned_32'Asm_Input ("r", CSR_ID));
+      return Result;
+   exception
+      when Constraint_Error =>
+         Arch.Debug.Print (
+            "[ERROR] Read_CSR failed: Invalid CSR_ID or access violation");
+         Arch.Debug.Print ("CSR_ID=" & U32'Image (CSR_ID));
+         Arch.Debug.Print (
+            "Returning 16#FFFFFFFFFFFFFFFF# to indicate failure");
+         -- 0 is a common return value for many CSRs, so we need to
+         --  return a different value to indicate failure.
+         -- Return a unique value to indicate failure
+         return 16#FFFFFFFFFFFFFFFF#;
+      when others =>
+         Arch.Debug.Print (
+            "[ERROR] Read_CSR encountered an unexpected exception");
+         Arch.Debug.Print ("CSR_ID=" & U32'Image (CSR_ID));
+         Lib.Panic.Hard_Panic ("Read_CSR unexpected exception");
+   end Read_CSR;
+
+   -------------------------------------------------------------------
+   -- Get the BSP hart identifier
+   -------------------------------------------------------------------
+   function Get_BSP_Hart return U32 is
+   begin
+      return U32 (Core_Locals (1).Hart_ID);
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("Get_BSP_Hart exception");
+   end Get_BSP_Hart;
 
 end Arch.CPU;
