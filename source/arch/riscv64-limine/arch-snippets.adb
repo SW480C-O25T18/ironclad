@@ -84,4 +84,24 @@ package body Arch.Snippets is
            Volatile => True);
       Debug.Print ("Write_SStatus: SStatus written");
    end Write_SStatus;
+
+      function Read_SATP return Unsigned_64 is
+      Value : Unsigned_64;
+   begin
+      Asm ( --"mov %%satp, %0",
+            "csrr %0, satp",
+           Outputs  => Unsigned_64'Asm_Output ("=r", Value),
+           Clobber  => "memory",
+           Volatile => True);
+      return Value;
+   end Read_SATP;
+
+   procedure Write_SATP (Value : Unsigned_64) is
+   begin
+      Asm ( -- "mov %0, %%satp",
+            "csrw satp, %0",
+           Inputs   => Unsigned_64'Asm_Input ("r", Value),
+           Clobber  => "memory",
+           Volatile => True);
+   end Write_SATP;
 end Arch.Snippets;

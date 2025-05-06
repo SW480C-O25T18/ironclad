@@ -25,7 +25,7 @@ package Memory is
    --  The kernel has a memory window into the rest of physical memory mapped
    --  at the beggining of the higher half. The kernel code itself is mapped
    --  2 GiB at the end of the address space.
-   Kernel_Offset : constant := Size'Last - (16#80000000# - 1);
+   Kernel_Offset : constant := Size'Last - (16#80000000# - 1); --at the last possible address space - 2Gib
    Memory_Offset : constant := 16#FFFF800000000000#;
 
    --  The maximum physical address we can have is as much as we can fit into
