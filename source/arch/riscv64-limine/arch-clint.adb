@@ -251,7 +251,7 @@ package body Arch.CLINT with SPARK_Mode => Off is
    end Clear_Timer_Interrupt;
 
    --------------------------------------------------------------------------
-   --  Resynchronize (no-op)
+   --  Resynchronize (MMIO Time Only)
    --------------------------------------------------------------------------
    procedure Resync (Reference : Address) is
    begin
