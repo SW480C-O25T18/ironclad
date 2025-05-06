@@ -24,7 +24,7 @@ with Lib.Messages;      use Lib.Messages;
 with Memory.Physical;
 with Arch.MMU;
 with Lib.Panic;
-with Arch.DTB;          use Arch.DTB;
+with Arch.FDT;
 with Arch.CPU;
 with Main;
 with Arch.Interrupts;
@@ -148,10 +148,10 @@ package body Arch.Entrypoint is
          when others => Handle_Exception ("Limine protocol translation");
       end;
 
-      -- DTB Initialization
+      -- FDT Initialization
       begin
-         Arch.Debug.Print ("[Stage 3] Initializing DTB...");
-         if not Arch.DTB.Init then
+         Arch.Debug.Print ("[Stage 3] Initializing FDT...");
+         if not Arch.FDT.Initialize then
             Lib.Panic.Hard_Panic ("No DTB was found!");
          end if;
          Arch.Debug.Print ("[Stage 3] DTB initialized successfully");

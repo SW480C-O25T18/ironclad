@@ -6,7 +6,7 @@
 --  context-specific configurations.
 --  Fully compliant with the RISC-V PLIC v1.0/v1.1 specifications.
 --  Includes meaningful debug statements and proper exception handling.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  Copyright (C) 2025 Sean C. Weeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -22,16 +22,16 @@
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 with Arch.Debug;               use Arch.Debug;
-with Arch.CPU;                 use Arch.CPU;
+with Arch.FDT;                 use Arch.FDT;
 with Lib.Panic;                use Lib.Panic;
 with System;                   use System;
+with Arch.Hooks;
 
 package body Arch.PLIC with SPARK_Mode => Off is
 
    ---------------------------------------------------------------------------
    --  Helper: Build register address from base offset
    ---------------------------------------------------------------------------
-   function Reg_Addr (Off : Storage_Offset) return Address;
    function Reg_Addr (Off : Storage_Offset) return Address is
    begin
       return To_Address (
@@ -40,6 +40,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
    exception
       when others =>
          Debug.Print ("Arch.PLIC: Unknown error in Reg_Addr");
+         return Null_Address;
    end Reg_Addr;
 
    ---------------------------------------------------------------------------
@@ -73,6 +74,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
       -- Parse 'reg' property
       Base := Get_Property_Unsigned_64 (Node, "reg", 1);
       Size := Get_Property_Unsigned_64 (Node, "reg", 2);
+
       Phys := To_Address (Integer_Address (Storage_Offset (Base)));
       Virt := Phys;
 
@@ -151,7 +153,7 @@ package body Arch.PLIC with SPARK_Mode => Off is
             Enable_IRQ (Hart_Id, Ctx, IRQ_Id (Idx));
          end loop;
          Debug.Print ("Arch.PLIC: Enabled all IRQs for context "
-                  & nsigned_32'Image (Unsigned_32 (Ctx)));
+                      & Unsigned_32'Image (Unsigned_32 (Ctx)));
       end if;
    exception
       when others =>
@@ -281,26 +283,5 @@ package body Arch.PLIC with SPARK_Mode => Off is
          Debug.Print ("Arch.PLIC: Unknown error in Complete");
          return;
    end Complete;
-
-   ---------------------------------------------------------------------------
-   --  Context Convenience
-   ---------------------------------------------------------------------------
-   function Supervisor_Context (Hart : Unsigned_64) return Context_Id is
-   begin
-      return Context_Id (Hart * 2 + 1);
-   exception
-      when others =>
-         Debug.Print ("Arch.PLIC: Unknown error in Supervisor_Context");
-         return Context_Id (0);
-   end Supervisor_Context;
-
-   function Machine_Context (Hart : Unsigned_64) return Context_Id is
-   begin
-      return Context_Id (Hart * 2);
-   exception
-      when others =>
-         Debug.Print ("Arch.PLIC: Unknown error in Machine_Context");
-         return Context_Id (0);
-   end Machine_Context;
 
 end Arch.PLIC;

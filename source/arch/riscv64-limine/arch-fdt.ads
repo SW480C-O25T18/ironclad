@@ -1,107 +1,167 @@
 --  arch-fdt.ads: Flattened Device Tree parser for riscv64-limine
---  Copyright (C) 2025 Sean Weeks
+--  Provides Device Tree Blob (DTB) parsing,
+--  node lookup, property and reg/interrupt readers.
+--  Fully compliant with the official FDT v0.4/v1.4 spec.
 --
---  This file is part of Ironclad.
+--  Copyright (C) 2025 Sean C. Weeks
 --
---  Ironclad is free software: you can redistribute it and/or modify
+--  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
 --  the Free Software Foundation, either version 3 of the License, or
 --  (at your option) any later version.
 --
---  Ironclad is distributed in the hope that it will be useful,
+--  This program is distributed in the hope that it will be useful,
 --  but WITHOUT ANY WARRANTY; without even the implied warranty of
 --  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
---  along with Ironclad.  If not, see <https://www.gnu.org/licenses/>.
+--  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 with System;
 with Interfaces;
+with Arch.Debug;
+with Lib.Panic;
 
 package Arch.FDT is
    pragma Style_Checks (Off);
+   pragma Preelaborate;
 
-   --  Max number of Reg entries in a 'reg' property
-   Max_Reg_Entries : constant Positive := 16;
+   --  Basic subtypes
+   subtype U32   is Interfaces.Unsigned_32;
+   subtype U64   is Interfaces.Unsigned_64;
+   subtype Addr  is System.Address;
 
-   --  A single (address, size) tuple from a 'reg' property
-   type Reg_Entry is record
-      Address : Interfaces.Unsigned_64;
-      Size    : Interfaces.Unsigned_64;
-   end record
-     with Convention => C;
+   --  FDT token constants (§5.4.2)
+   FDT_BEGIN_NODE : constant U32 := 1;
+   FDT_END_NODE   : constant U32 := 2;
+   FDT_PROP       : constant U32 := 3;
+   FDT_NOP        : constant U32 := 4;
+   FDT_END        : constant U32 := 9;
 
-   --  Fixed-capacity vector of Reg_Entry
-   type Reg_Vector is record
-      Entries : array (Positive range 1 .. Max_Reg_Entries) of Reg_Entry;
-      Length  : Natural := 0;
+   --  Header offsets (§5.2)
+   Header_Magic_Off       : constant := 0;
+   Header_TotalSize_Off   : constant := 4;
+   Header_Off_Struct      : constant := 8;
+   Header_Off_Strings     : constant := 12;
+   Header_Off_Reserve     : constant := 16;
+   Header_Version_Off     : constant := 20;
+   Header_LastComp_Off    : constant := 24;
+   Header_BootHart_Off    : constant := 28;
+   Header_SizeStrings_Off : constant := 32;
+   Header_SizeStruct_Off  : constant := 36;
+
+   --  Magic value (§5.2)
+   DTB_Magic : constant U32 := 16#D00DFEED#;
+
+   --  Opaque DTB handle storing header and block info
+   type Handle is record
+      Base_Address       : Addr;
+      Total_Size         : U32;
+      Off_Struct         : U32;
+      Off_Strings        : U32;
+      Off_Reserve        : U32;
+      Version            : U32;
+      Last_Comp_Version  : U32;
+      Boot_CPUID         : U32;
+      Size_Struct        : U32;
+      Size_Strings       : U32;
+      Struct_End         : Addr;
    end record;
 
-   --  Append a Reg_Entry to Reg_Vector (no-op on overflow)
-   procedure Append_Reg
-     (Vec : in out Reg_Vector;
-      E   : in     Reg_Entry);
+   --  Initialize parser with DTB at Base; returns False on invalid blob
+   function Initialize (Base_Address : Addr) return Boolean;
 
-   --  Interrupt specifier cells (e.g. <irq#, flags>)
-   Max_Int_Cells : constant Positive := 8;
-   type Int_Cells is array (Positive range 1 .. Max_Int_Cells) of Interfaces.Unsigned_32;
-   type Int_Vector is record
-      Cells  : Int_Cells;
-      Length : Natural := 0;
-   end record;
+   --  Release resources (no-op)
+   procedure Close (H : in out Handle);
 
-   --  Append an interrupt cell to Int_Vector (no-op on overflow)
-   procedure Append_Int_Cell
-     (Vec : in out Int_Vector;
-      C   : in     Interfaces.Unsigned_32);
+   --  Boot hart identifier from header
+   function Boot_CPUID (H : Handle) return U32;
 
-   --  Opaque handle to an open DTB
-   type Handle is limited private;
+   --  Spec version and compatibility
+   function Version (H : Handle) return U32;
+   function Last_Compatible (H : Handle) return U32;
 
-   --  Map the DTB blob at Base_Address.  Returns a handle if magic valid
-   function Open
-     (Base_Address : System.Address)
-      return Handle;
+   --  Size of structure and strings blocks
+   function Structure_Size (H : Handle) return U32;
+   function Strings_Size   (H : Handle) return U32;
 
-   --  Release resources (if any)
-   procedure Close
-     (H : in out Handle);
+   --  Node lookup by 'compatible' (binary-search on cache)
+   function Find_Node (H : Handle; Compatible : String) return Addr;
+   function Find_Node (Compatible : String) return Addr;
 
-   --  Find the first node whose 'compatible' property includes the given string.
-   --  Returns System.Null_Address if not found.
-   function Find_Node
-     (H           : Handle;
-      Compatible  : String)
-      return System.Address;
-
-   --  Read a 32-bit integer property; return Default if missing
+   --  Property readers
    function Get_Property_U32
-     (H        : Handle;
-      Node     : System.Address;
-      Name     : String;
-      Default  : Interfaces.Unsigned_32)
-      return Interfaces.Unsigned_32;
+     (H       : Handle;
+      Node    : Addr;
+      Name    : String;
+      Default : U32)
+      return U32;
 
-   --  Read the 'reg' property into a Reg_Vector
-   function Get_Reg
-     (H    : Handle;
-      Node : System.Address)
-      return Reg_Vector;
+   function Get_Property_U64
+     (H       : Handle;
+      Node    : Addr;
+      Name    : String;
+      Default : U64)
+      return U64;
 
-   --  Read an interrupt-specifier array from a property
-   function Get_Interrupts
+   function Get_Property_Array_U32
      (H    : Handle;
-      Node : System.Address;
+      Node : Addr;
       Name : String)
       return Int_Vector;
 
+   --  'reg' and 'interrupts' readers
+   function Get_Reg (H : Handle; Node : Addr) return Reg_Vector;
+   function Get_Interrupts (H : Handle; Node : Addr; Name : String) return Int_Vector;
+
 private
-   --  Internal handle stores DTB base and block offsets
-   type Handle is record
-      Base_Address : System.Address;
-      Off_Struct   : Interfaces.Unsigned_32;
-      Off_Strings  : Interfaces.Unsigned_32;
+   --  Fixed-capacity structures (no unconstrained arrays)
+   Max_Compat   : constant := 64;
+   Max_Compat_L : constant := 64;
+   Max_Reg      : constant := 32;
+   Max_Int_Cells: constant := 8;
+
+   type Compat_String is record
+      Length : Natural;
+      Data   : String (1 .. Max_Compat_L);
    end record;
 
+   type Compat_Entry is record
+      Compatible : Compat_String;
+      Offset     : Addr;
+   end record;
+
+   type Compat_Array is array (Positive range 1 .. Max_Compat) of Compat_Entry;
+   Compat_Cache : Compat_Array;
+   Compat_Count : Natural := 0;
+
+   --  Reg and interrupt vectors
+   type Reg_Entry is record
+      Address : U64;
+      Size    : U64;
+   end record;
+
+   type Reg_Vector is record
+      Entries : array (Positive range 1 .. Max_Reg) of Reg_Entry;
+      Length  : Natural := 0;
+   end record;
+
+   type Int_Vector is record
+      Cells  : array (Positive range 1 .. Max_Int_Cells) of U32;
+      Length : Natural := 0;
+   end record;
+
+   --  Low-level helper signatures
+   function Read8      (A : Addr)               return Interfaces.Unsigned_8;
+   function Read_BE32  (A : Addr)               return U32;
+   function Read_BE64  (A : Addr)               return U64;
+   function Align4     (A : Addr)               return Addr;
+
+   --  Append helpers
+   procedure Append_Reg      (Vec : in out Reg_Vector; E : in Reg_Entry);
+   procedure Append_Int_Cell (Vec : in out Int_Vector; C : in U32);
+
+   --  Persistent handle
+   DTB_Handle : Handle;
 end Arch.FDT;

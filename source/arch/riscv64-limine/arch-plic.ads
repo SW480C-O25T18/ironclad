@@ -5,7 +5,7 @@
 --  Handles interrupt enabling, priority management, and
 --  context-specific configurations.
 --  Fully compliant with the RISC-V PLIC v1.0/v1.1 specifications.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  Copyright (C) 2025 Sean C. Weeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -30,11 +30,9 @@ package Arch.PLIC with SPARK_Mode => Off is
    ---------------------------------------------------------------------------
    --  Types
    ---------------------------------------------------------------------------
-   --  Identifier for an interrupt source
-   type IRQ_Id is new Unsigned_32;
-
    --  Identifier for a context (Machine or Supervisor)
-   type Context_Id is new Unsigned_32;
+   type Context_Type is (Machine_Mode, Supervisor_Mode);
+   type Context_Id is new Context_Type;
 
    ---------------------------------------------------------------------------
    --  Global Variables (post-configuration)
@@ -55,6 +53,42 @@ package Arch.PLIC with SPARK_Mode => Off is
    Plic_Version : Unsigned_32;
 
    ---------------------------------------------------------------------------
+   --  Constants for PLIC register offsets
+   ---------------------------------------------------------------------------
+   -- Base offset for priority registers
+   Priority_Base : constant Storage_Offset := 16#0000#;
+
+   -- Base offset for enable bits
+   Enable_Base : constant Storage_Offset := 16#2000#;
+
+   -- Base offset for claim/complete registers
+   Claim_Base : constant Storage_Offset := 16#200004#;
+
+   -- Stride for context-specific regions
+   Context_Stride : constant Storage_Offset := 16#1000#;
+
+   ---------------------------------------------------------------------------
+   --  Interrupt Priority and Threshold Constants
+   ---------------------------------------------------------------------------
+   -- Minimum and maximum interrupt priority levels
+   Min_Priority : constant Unsigned_32 := 0;
+   Max_Priority : constant Unsigned_32 := 7;
+
+   -- Default interrupt threshold values
+   Default_Threshold : constant Unsigned_32 := 0;
+
+   ---------------------------------------------------------------------------
+   --  Context-Specific Constants
+   ---------------------------------------------------------------------------
+   -- Context-specific offsets
+   Machine_Context_Offset : constant Storage_Offset := 0;
+   Supervisor_Context_Offset : constant Storage_Offset := Context_Stride;
+
+   -- Supported PLIC versions
+   PLIC_Version_1_0 : constant Unsigned_32 := 16#10#;
+   PLIC_Version_1_1 : constant Unsigned_32 := 16#11#;
+
+   ---------------------------------------------------------------------------
    --  Presence Detection
    ---------------------------------------------------------------------------
    --  True if a 'riscv,plic0' node exists and can be mapped
@@ -70,6 +104,9 @@ package Arch.PLIC with SPARK_Mode => Off is
    ---------------------------------------------------------------------------
    --  Initialization
    ---------------------------------------------------------------------------
+   -- Initialize the PLIC with default values
+   procedure Initialize_PLIC;
+   
    --  Enable all interrupts (threshold=0) for the given context.
    procedure Initialize
      (Hart_Id : Unsigned_64;
@@ -127,10 +164,12 @@ package Arch.PLIC with SPARK_Mode => Off is
    --  Calculate the supervisor-mode context index for a hart.
    function Supervisor_Context (Hart : Unsigned_64)
      return Context_Id;
+     pragma Inline_Always;
 
    --  Calculate the machine-mode context index for a hart.
    function Machine_Context (Hart : Unsigned_64)
      return Context_Id;
+       pragma Inline_Always;
 
 private
 
@@ -139,6 +178,8 @@ private
    ---------------------------------------------------------------------------
    --  Base for priority registers: Plic_Base + Priority_Base + 4×IRQ_Id
    Priority_Base : constant Storage_Offset := 0;
+
+   --  Step size between priority registers (in bytes)
    Priority_Step : constant Storage_Offset := 4;
 
    --  Enable bits start at Plic_Base + Enable_Base + Context_Stride×Ctx
@@ -154,5 +195,8 @@ private
    --  Claim/Complete register at Plic_Base +
    --  Threshold_Base + 4 + Context_Stride×Ctx
    Claim_Base : constant Storage_Offset := 16#200004#;
+
+   -- Page size for MMIO mapping
+   Page_Size : constant Storage_Offset := 16#1000#;
 
 end Arch.PLIC;
