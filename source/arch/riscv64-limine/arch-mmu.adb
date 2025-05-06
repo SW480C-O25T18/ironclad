@@ -62,15 +62,8 @@ package body Arch.MMU is
    end Combine_Satp_Data;
 
 
- ------------------------------------------------------------------
---  RISC-V Sv39  kernel-space page-table initialiser
---  (assumes 4 KiB pages, 3-level page table, direct-map window
---   at Memory_Offset, and a helper Inner_Map_Range that fills
---   leaf PTEs using the Page_Table_Entry record).
-------------------------------------------------------------------
 function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
 
-   --  1. Pre-made permission sets, expressed in our Ada record type
    RW_Flags : constant Page_Permissions :=
       (Is_User_Accesible => False,
        Can_Read          => True,
@@ -92,9 +85,6 @@ function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
        Can_Execute       => False,
        Is_Global         => True);
 
-   ----------------------------------------------------------------
-   --  2. Linker symbols that delimit kernel segments
-   ----------------------------------------------------------------
    text_start, text_end,
    rodata_start, rodata_end,
    data_start,  data_end : Character
@@ -104,13 +94,10 @@ function Init (Memmap : Arch.Boot_Memory_Map) return Boolean is
    OSAddr : constant Integer_Address := To_Integer (rodata_start'Address);
    DSAddr : constant Integer_Address := To_Integer (data_start'Address);
 
-   --  Physical load address as supplied by the boot loader / SBI
    Phys   : constant Integer_Address :=
          To_Integer (Limine.Get_Physical_Address);
 begin
-   ----------------------------------------------------------------
-   --  3. Allocate an empty three-level page table
-   ----------------------------------------------------------------
+
    MMU.Kernel_Table := new Page_Table'
      (Root               => 0,
       Page_Level         => 1,
@@ -118,10 +105,6 @@ begin
   new Page_Level'(others => (others => <>)) ,
       Mutex              => Lib.Synchronization.Unlocked_RW_Lock);
 
-   ----------------------------------------------------------------
-   --  4. Identity-map every boot-reported usable RAM region
-   --     into the “higher-half” window (direct-map).
-   ----------------------------------------------------------------
    for E of Memmap loop
       if not Inner_Map_Range
          (Map            => Kernel_Table,
@@ -135,9 +118,6 @@ begin
       end if;
    end loop;
 
-   ----------------------------------------------------------------
-   --  5. Map the kernel image itself with fine-grained permissions
-   ----------------------------------------------------------------
    if not Inner_Map_Range
         (Map            => Kernel_Table,
          Physical_Start => To_Address (TSAddr - Kernel_Offset + Phys),
@@ -165,17 +145,11 @@ begin
       return False;
    end if;
 
-   ----------------------------------------------------------------
-   --  6. Book-keeping: total bytes of the linked kernel image
-   ----------------------------------------------------------------
    Global_Kernel_Usage :=
        Memory.Size (text_end'Address   - text_start'Address)
      + Memory.Size (rodata_end'Address - rodata_start'Address)
      + Memory.Size (data_end'Address   - data_start'Address);
 
-   ----------------------------------------------------------------
-   --  7. Activate the new table: MODE=8 (Sv39), ASID=0
-   ----------------------------------------------------------------
    return Make_Active (Kernel_Table);
 
 exception
@@ -192,7 +166,6 @@ end Init;
       Permissions    : Page_Permissions;
       Caching        : Caching_Model) return Boolean
    is
-      --  Flags : constant Unsigned_64 := Flags_To_Bitmap (Permissions, Caching);
 
       Virt  : Virtual_Address          := To_Integer (Virtual_Start);
       Phys  : Virtual_Address          := To_Integer (Physical_Start);
@@ -200,16 +173,10 @@ end Init;
       Addr  : Virtual_Address;
    begin
    while Virt < Final loop
-      ------------------------------------------------------------
-      --  Declarations first
-      ------------------------------------------------------------
       declare
          PTE_Access : constant Page_Table_Entry_Access :=
          Get_Page (Map, Virt, True);
       begin
-         ---------------------------------------------------------
-         --  Executable statements
-         ---------------------------------------------------------
          if PTE_Access = null then
             return False;
          end if;
@@ -257,7 +224,6 @@ end Init;
 
       Addr64 : constant Unsigned_64 := Unsigned_64 (Virtual);
 
-      --  VPN[2:0] indices (9 bits each)
       VPN2 : constant Unsigned_64 :=
                Shift_Right (Addr64 and Shift_Left (16#1FF#, 30), 30);
       VPN1 : constant Unsigned_64 :=
@@ -265,16 +231,12 @@ end Init;
       VPN0 : constant Unsigned_64 :=
                Shift_Right (Addr64 and Shift_Left (16#1FF#, 12), 12);
 
-      --  L2_Phys : Physical_Address :=
-      --              To_Integer (Map.Root'Address) - Memory_Offset;
       L2_Phys : Physical_Address := Physical_Address (Map.Root);
       L1_Phys : Physical_Address := Memory.Null_Address;
       L0_Phys : Physical_Address := Memory.Null_Address;
       PTE_VA  : Virtual_Address;
    begin
-      ----------------------------------------------------------------
-      --  Walk L2 → L1 → L0, allocating new table pages if requested
-      ----------------------------------------------------------------
+
       L1_Phys := Get_Next_Level (L2_Phys, VPN2, Allocate);
       if L1_Phys = Memory.Null_Address then
          return null;
@@ -285,10 +247,6 @@ end Init;
          return null;
       end if;
 
-      ----------------------------------------------------------------
-      --  Convert the level-0 table’s *physical* base back to a
-      --  kernel-virtual address (direct-map) and add the slot offset.
-      ----------------------------------------------------------------
       PTE_VA := L0_Phys + Memory_Offset + Physical_Address (VPN0) * 8;
 
       return Addr_To_PTE_Access (To_Address (PTE_VA));
@@ -300,11 +258,6 @@ end Init;
 
    -----------------------------------------------------------------
    --  Walk/allocate one step down the Sv39 tree.
-   --  Current_Level  : physical base of the table we are looking at.
-   --  Index          : VPN component (0‥511) to pick inside that table.
-   --  Create_If_Not_Found
-   --      = True  → allocate a new 4‑KiB zeroed page if entry empty.
-   --      = False → just return Null_Address if entry empty.
    --  Return value   : physical address of the child table, or Null_Address.
    -----------------------------------------------------------------
    function Get_Next_Level
@@ -312,15 +265,10 @@ end Init;
       Index               : Unsigned_64;
       Create_If_Not_Found : Boolean) return Physical_Address
    is
-      ----------------------------------------------------------------
-      --  Location of the 8‑byte slot in the current table
-      ----------------------------------------------------------------
+
       Slot_VA  : constant Virtual_Address :=
       Current_Level + Memory_Offset + Physical_Address (Index * 8);
 
-      --  pragma Import (Ada, Slot_VA);
-
-      --  A typed view of that slot
       Slot : Page_Table_Entry
       with Import, Address => To_Address (Slot_VA);
    begin
@@ -333,7 +281,7 @@ end Init;
       and then Slot.W = 0
       and then Slot.X = 0
       then
-         return Extract_Physical_Addr (Slot);  -- helper described earlier
+         return Extract_Physical_Addr (Slot);
       end if;
 
       --
@@ -350,7 +298,6 @@ end Init;
 
             PPN : constant Unsigned_64 := Unsigned_64 (Child_Phys) / 4096;
          begin
-            --  Fill the slot as a non‑leaf PTE (only V‑bit set)
             Slot.PPN0 := U9 (PPN              and 16#1FF#);
             Slot.PPN1 := U9 (Shift_Right (PPN,  9) and 16#1FF#);
             Slot.PPN2 := U26(Shift_Right (PPN, 18));
@@ -491,32 +438,18 @@ function Make_Active (Map : Page_Table_Acc) return Boolean is
    New_PPN       : U44;
    New_SATP      : Unsigned_64;
 begin
-   ----------------------------------------------------------------
-   --  1. Kernel VA → physical → PPN
-   ----------------------------------------------------------------
-   --  Physical_Addr :=
-   --    Unsigned_64 (To_Integer (Map.Page_Table_Entries'Address)
-   --                 - Memory.Memory_Offset);
+
    Physical_Addr := Unsigned_64 (Map.Root);
 
    New_PPN := U44 (Physical_Addr / 4096);  --  >> 12
 
-   ----------------------------------------------------------------
-   --  2. Read current SATP (keeps MODE and ASID intact)
-   ----------------------------------------------------------------
+
    Satp_Content := Extract_Satp_Data (Arch.Snippets.Read_SATP);
 
-
-   ----------------------------------------------------------------
-   --  3. If PPN already matches, nothing to do
-   ----------------------------------------------------------------
    if Satp_Content.PPN = New_PPN then
       return True;
    end if;
 
-   ----------------------------------------------------------------
-   --  4. Update only the PPN and write back
-   ----------------------------------------------------------------
    Satp_Content.PPN := New_PPN;
    New_SATP := Combine_Satp_Data (Satp_Content);
 
