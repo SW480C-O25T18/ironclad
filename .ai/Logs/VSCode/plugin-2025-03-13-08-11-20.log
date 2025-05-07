@@ -1,0 +1,6 @@
+[3/13/2025, 8:11:20 AM] info: Logging was started to file.
+[3/13/2025, 8:11:20 AM] info: Start application inspector initialization
+[3/13/2025, 8:11:20 AM] info: Show developer mode UI
+[3/13/2025, 8:11:20 AM] info: Infrastructure Configurations: {"port":8001,"infrastructureAssemblyFolderPath":"C:\\Users\\seanw\\AppData\\Local\\Application Inspector Analyzer","applicationResourcesFolderPath":"C:\\Users\\seanw\\AppData\\Local\\Application Inspector Analyzer","scanTargetFolderPath":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch","isDebugging":false,"logLevel":{"q8_1":"Error","r8_1":5,"type":5,"key":"Settings.LogLevel.Error.Text"},"logDir":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch\\.ai\\Logs\\Infrastructure\\2025-03-13-08-11-20","tipsFoundNotificationThreshold":1000,"similarIssuesFoundNotificationThreshold":1000,"applicationLocalDataFolderPath":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch\\.ai"}
+[3/13/2025, 8:11:20 AM] info: Start infrastructure initialization
+[3/13/2025, 8:11:20 AM] warn: listen EADDRINUSE: address already in use 127.0.0.1:8001

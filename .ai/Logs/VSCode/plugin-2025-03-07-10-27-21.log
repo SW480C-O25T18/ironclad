@@ -1,0 +1,12 @@
+[3/7/2025, 10:27:21 AM] info: Logging was started to file.
+[3/7/2025, 10:27:21 AM] info: Start application inspector initialization
+[3/7/2025, 10:27:21 AM] info: Show developer mode UI
+[3/7/2025, 10:27:21 AM] info: Infrastructure Configurations: {"port":8002,"infrastructureAssemblyFolderPath":"C:\\Users\\seanw\\AppData\\Local\\Application Inspector Analyzer","applicationResourcesFolderPath":"C:\\Users\\seanw\\AppData\\Local\\Application Inspector Analyzer","scanTargetFolderPath":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch","isDebugging":false,"logLevel":{"q8_1":"Error","r8_1":5,"type":5,"key":"Settings.LogLevel.Error.Text"},"logDir":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch\\.ai\\Logs\\Infrastructure\\2025-03-07-10-27-21","tipsFoundNotificationThreshold":1000,"similarIssuesFoundNotificationThreshold":1000,"applicationLocalDataFolderPath":"e:\\DevRepos\\SWENG480_Capstone\\Panic_Branch\\.ai"}
+[3/7/2025, 10:27:21 AM] info: Start infrastructure initialization
+[3/7/2025, 10:27:24 AM] info: Infrastructure was started
+[3/7/2025, 10:27:28 AM] info: Initialize aie integration isn't initialized
+[3/7/2025, 10:27:28 AM] info: Infrastructure was initialized
+[3/7/2025, 10:27:28 AM] info: Infrastructure Installer was deleted
+[3/7/2025, 10:27:28 AM] info: Clean up logs files was started
+[3/7/2025, 10:27:28 AM] info: Clean up logs files was finished
+[3/7/2025, 10:27:29 AM] info: Project was created. Id: d9b59993-eda3-4a3d-a1ea-fdd9a65deeb2
