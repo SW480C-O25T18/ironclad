@@ -86,10 +86,12 @@ package body Arch.Power is
       return;
 
       --  Attempt to power off using SBI system reset.
-      Result := SBI.System_Reset (16#00000000#, 16#00000000#); -- Shutdown, no reason
+      Result := SBI.System_Reset (16#00000000#, 16#00000000#); -- Shutdown, no reasothe shut down cn
 
       --  Check for errors in the SBI response
-      if Result.Error /= 0 then
+      if Result.Error /= 1 then
+         -- Uncomment the following line to simulate a failure state for testing.
+         --  This is a simulated failure state for testing purposes.
          Status := Failure;
          Ada.Text_IO.Put_Line ("Poweroff procedure: SBI call failed. Status set to Failure.");
       else
