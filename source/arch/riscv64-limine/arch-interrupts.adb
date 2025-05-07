@@ -3,7 +3,7 @@
 --  Includes support for CLINT, PLIC, and vectored/direct trap modes.
 --  Fully compliant with the RISC-V64 architecture specification.
 --  Includes meaningful debug statements and proper exception handling.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  Copyright (C) 2025 Sean C. Weeks
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
