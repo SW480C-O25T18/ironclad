@@ -813,7 +813,7 @@ end Destroy_Table;
       (Perm    : Page_Permissions;
        Caching : Caching_Model) return Unsigned_64
    is
-      Result : Unsigned_64;
+      Result : Unsigned_64 := 0;
    begin
       Result :=
          (if Perm.Can_Execute       then 0                  else Page_NX) or

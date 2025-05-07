@@ -14,7 +14,19 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+with Interfaces; use Interfaces;
+
 package Arch.Entrypoint is
+   --  Convert Unsigned_64 to String using Ada.Strings.Fixed
+   subtype Context_String is String (1 .. 20);
+   function Unsigned_To_String (Value : Unsigned_64) return Context_String;
+
+   --  Consolidate Exception Handling to reduce code size
+   --  and improve readability.
+   procedure Handle_Exception (Context : String);
+
+   --  This is the entry point for the kernel. It is called by Limine
+   --  after the bootloader has loaded the kernel into memory.
    procedure Bootstrap_Main
       with Export, Convention => C, External_Name => "kernel_main";
 end Arch.Entrypoint;

@@ -1,5 +1,5 @@
 #  arch-offsets.inc: RISC-V64 Trap Frame Offsets
-#  Copyright (C) 2025 Sean C. Weeks - badrock1983
+#  Copyright (C) 2025 Sean C. Weeks
 #
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -53,10 +53,13 @@
 .set FRAME_SCAUSE,  256     # scause
 .set FRAME_STVAL,   264     # stval
 .set FRAME_SSTATUS, 272     # sstatus
+.set FRAME_FCSR,    280     # fcsr
+.set FRAME_FPCTX,   288     # FP_Context_Ptr
 
-.set FRAME_FPCTX,   280     # FP_Context_Ptr
+.set FRAME_SIZE,    304     # Total size of Frame (16‑byte aligned)
 
-.set FRAME_SIZE,    288     # Total size of Frame
-
-# TCB layout
-.set TCB_FPCTX,     128     # offset of FP_Context_Ptr in TCB
+#  ----------------------------------------------------------------------------
+#  TCB_* macros to access the current-context pointer in the TCB via TP
+#  The TCB_CONTEXT_OFFSET in Ada is 208 bytes, so:
+# Offset of the context-pointer field in the TCB
+.set TCB_FPCTX,      368     

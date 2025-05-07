@@ -18,6 +18,12 @@ with Arch.Snippets;
 with Lib.Panic;
 with Arch.CPU;
 
+pragma Warnings (Off);
+
+pragma Unreferenced (Arch.Snippets);
+pragma Unreferenced (Lib.Panic);
+pragma Unreferenced (Arch.CPU);
+
 package body Arch.PCI is
    function Is_Supported return Boolean is
    begin

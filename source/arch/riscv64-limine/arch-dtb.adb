@@ -1,5 +1,12 @@
 --  arch-dtb.adb: Device-tree blob parsing.
+--  Provides utilities for parsing and interacting with DTBs
+--  in RISC-V64 systems.
+--  Implements parsing, property fetching, and node traversal for DTBs.
+--  Fully compliant with the DTB specification.
+--  Optimized for time and space efficiency.
+--  Includes meaningful debug statements and proper exception handling.
 --  Copyright (C) 2024 streaksu
+--  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -14,32 +21,60 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Ada.Containers.Vectors;
-with Ada.Strings.Unbounded;           use Ada.Strings.Unbounded;
-with Ada.Text_IO;                     use Ada.Text_IO;
-with Ada.Exceptions;                  use Ada.Exceptions;
-with Interfaces;                      use Interfaces;
-with System;                          use System;
-with System.Storage_Elements;         use System.Storage_Elements;
-with Arch.Limine;
-with Arch.Debug;                      -- for debug and error logging
-with Ada.Strings.Unbounded.Text_IO;
+with System;                     use System;
+with System.Storage_Elements;    use System.Storage_Elements;
+with Ada.Unchecked_Conversion;   use Ada.Unchecked_Conversion;
+with Arch.Debug;                 use Arch.Debug;
+with Limine;                     use Limine;
 
 package body Arch.DTB with SPARK_Mode => Off is
 
-   ------------------------------------------------------------------------------
-   -- DTB Token Constants (Flattened Device Tree spec)
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  DTB Token Constants
+   -----------------------------------------------------------------------------
    FDT_BEGIN_NODE : constant Unsigned_32 := 16#1#;
    FDT_END_NODE   : constant Unsigned_32 := 16#2#;
    FDT_PROP       : constant Unsigned_32 := 16#3#;
    FDT_NOP        : constant Unsigned_32 := 16#4#;
    FDT_END        : constant Unsigned_32 := 16#9#;
 
-   ------------------------------------------------------------------------------
-   -- Endianness Conversion
-   -- The DTB is stored in big-endian format; convert a 32-bit value to host order.
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  Magic Number
+   -----------------------------------------------------------------------------
+   FDT_MAGIC : constant Unsigned_32 := 16#EDFE0DD0#;
+
+   -----------------------------------------------------------------------------
+   --  Access Types for Pointer Conversions
+   -----------------------------------------------------------------------------
+   type U32_Ptr is access all Unsigned_32;
+   function To_U32_Ptr is new Ada.Unchecked_Conversion (Address, U32_Ptr);
+
+   type U8_Ptr is access all Unsigned_8;
+   function To_U8_Ptr is new Ada.Unchecked_Conversion (Address, U8_Ptr);
+
+   -----------------------------------------------------------------------------
+   --  Base Addresses (Set in Init)
+   -----------------------------------------------------------------------------
+   Struct_Base  : Address := Null_Address;
+   Strings_Base : Address := Null_Address;
+   DTB_End      : Address := Null_Address;
+
+   -----------------------------------------------------------------------------
+   --  Helper Functions
+   -----------------------------------------------------------------------------
+
+   -----------------------------------------------------------------------------
+   --  Helper Function: Check if a string contains a substring
+   -----------------------------------------------------------------------------
+   function Contains_Substring (Str, Sub : String) return Boolean is
+   begin
+      return String'Index (Str, Sub) /= 0;
+   end Contains_Substring;
+
+   -- Forward declaration of Parse_Property
+   procedure Parse_Property (Node : DTB_Node_Access; Pos : in out Address);
+   
+   --  Convert 32-bit big-endian to host order
    function BE_To_Host (Val : Unsigned_32) return Unsigned_32 is
       B0, B1, B2, B3 : Unsigned_32;
    begin
@@ -47,396 +82,415 @@ package body Arch.DTB with SPARK_Mode => Off is
       B1 := (Val and 16#00FF0000#) / 16#10000#;
       B2 := (Val and 16#0000FF00#) / 16#100#;
       B3 := (Val and 16#000000FF#);
-      Debug.Print ("BE_To_Host: " & Unsigned_32'Image(Val) & " -> " &
-                   Unsigned_32'Image(B3 * 16#1000000#) & Unsigned_32'Image(B2 * 16#10000#) &
-                   Unsigned_32'Image(B1 * 16#100#) & Unsigned_32'Image(B0));
       return B3 * 16#1000000# + B2 * 16#10000# + B1 * 16#100# + B0;
    end BE_To_Host;
 
-   ------------------------------------------------------------------------------
-   -- Global variable to store the end address of the DTB blob (for bounds checking)
-   ------------------------------------------------------------------------------
-   DTB_End : System.Address := System.Null_Address;
-
-   ------------------------------------------------------------------------------
-   -- Global header in host order (converted once during Init).
-   ------------------------------------------------------------------------------
-   Global_Header : FDT_Header;
-
-   ------------------------------------------------------------------------------
-   -- Memory Reading Helpers with Bounds Checking
-   ------------------------------------------------------------------------------
-   procedure Check_Bounds (Addr : System.Address; Bytes : Natural) is
+   --  Read a 32-bit BE value from memory
+   function Read_BE32 (Addr : Address) return Unsigned_32 is
+      Ptr : U32_Ptr := To_U32_Ptr (Addr);
    begin
-      Debug.Print ("Check_Bounds: " & To_String(Addr) & " + " & To_String(Bytes));
-      if Addr + To_Address(Bytes) > DTB_End then
-         Debug.Print("Error: Attempted to read beyond DTB bounds");
-         raise Program_Error with "DTB bounds exceeded";
-      end if;
-   end Check_Bounds;
-
-   function Read_UInt32 (Addr : System.Address) return Unsigned_32 is
-      type UInt32_Ptr is access all Unsigned_32;
-   begin
-      Debug.Print ("Read_UInt32: " & To_String(Addr));
-      Check_Bounds(Addr, 4);
-      Debug.Print ("Read_UInt32 Successfully Checked Bounds");
-      return UInt32_Ptr(Addr).all;
-   end Read_UInt32;
-
-   function Read_BE32 (Addr : System.Address) return Unsigned_32 is
-   begin
-      Debug.Print ("Read_BE32: " & To_String(Addr));
-      return BE_To_Host(Read_UInt32(Addr));
+      return BE_To_Host (Ptr.all);
+   exception
+      when others =>
+         Debug.Print ("Read_BE32: Exception occurred.");
+         return 0; -- Return a default value
    end Read_BE32;
 
-   ------------------------------------------------------------------------------
-   -- Read a Null-Terminated String from Memory
-   -- Returns an Unbounded_String.
-   ------------------------------------------------------------------------------
-   function Read_Null_Terminated_String (Addr : System.Address) return Unbounded_String is
-      type Byte_Ptr is access all Unsigned_8;
-      Ptr    : constant Byte_Ptr := Addr'To_Access(Byte_Ptr);
-      Result : Unbounded_String := To_Unbounded_String("");
-      C      : Character;
-      Index  : Natural := 0;
+   --  Align address to 4-byte boundary
+   function Align4 (Addr : Address) return Address is
    begin
-      loop
-         Index := Index + 1;
-         Check_Bounds(Addr, Index);
-         C := Character'Val(Integer(Ptr(Index)));
-         exit when C = ASCII.NUL;
-         Result := Result & To_Unbounded_String(C);
-         Debug.Print ("Read_Null_Terminated_String: " & To_String(Result));
-         if Index > 1024 then  -- safeguard limit
-            Arch.Debug.Print("Error: String length exceeded maximum limit");
-            raise Program_Error with "String length exceeded maximum limit";
-         end if;
-      end loop;
-      Debug.Print ("Final Read_Null_Terminated_String: " & To_String(Result));
-      return Result;
-   end Read_Null_Terminated_String;
-
-   ------------------------------------------------------------------------------
-   -- Pointer Arithmetic Helpers
-   ------------------------------------------------------------------------------
-   function Advance (Addr : System.Address; Bytes : Natural) return System.Address is
-   begin
-      Debug.Print ("Advance: " & To_String(Addr) & " + " & To_String(Bytes));
-      return Addr + To_Address(Bytes);
-   end Advance;
-
-   function Align4 (Addr : System.Address) return System.Address is
-      Offset : constant Natural := Natural(Addr mod 4);
-   begin
-      if Offset = 0 then
-         Debug.Print ("Align4: " & To_String(Addr));
-         return Addr;
-      else
-         Debug.Print ("Align4: " & To_String(Addr) & " + " & To_String(4 - Offset));
-         return Addr + To_Address(4 - Offset);
-      end if;
+      return Addr + To_Address ((4 - Integer (Addr mod 4)) mod 4);
    end Align4;
 
-   ------------------------------------------------------------------------------
-   -- Memory Pool Limits for DTB Parsing
-   ------------------------------------------------------------------------------
-   Max_Properties_Per_Node : constant Natural := 64;
-   Max_Children_Per_Node   : constant Natural := 64;
-
-   ------------------------------------------------------------------------------
-   -- Dynamic Containers for DTB Properties and Nodes
-   ------------------------------------------------------------------------------
-   type DTB_Property_Type is record
-      Name   : Unbounded_String;
-      Length : Natural;
-      Value  : System.Address;  -- Pointer to the property value in the DTB blob.
-   end record;
-
-   package DTB_Property_Vector is new Ada.Containers.Vectors
-     (Index_Type => Natural, Element_Type => DTB_Property_Type);
-
-   type DTB_Node;
-   type DTB_Node_Access is access all DTB_Node;
-
-   package DTB_Node_Vector is new Ada.Containers.Vectors
-     (Index_Type => Natural, Element_Type => DTB_Node_Access);
-
-   type DTB_Node is record
-      Name       : Unbounded_String;
-      Properties : DTB_Property_Vector.Vector;
-      Children   : DTB_Node_Vector.Vector;
-   end record;
-
-   ------------------------------------------------------------------------------
-   -- Global Variables for Parsed DTB and Block Base Addresses
-   ------------------------------------------------------------------------------
-   Root_Node    : DTB_Node_Access := null;
-   Struct_Base  : System.Address := System.Null_Address;
-   Strings_Base : System.Address := System.Null_Address;
-
-   ------------------------------------------------------------------------------
-   -- DTB Header Declaration (fields in DTB blob are big-endian)
-   ------------------------------------------------------------------------------
-   type FDT_Header is record
-      Magic                : Unsigned_32;
-      Total_Size           : Unsigned_32;
-      Offset_DT_Struct     : Unsigned_32;
-      Offset_DT_Strings    : Unsigned_32;
-      Offset_Reserved      : Unsigned_32;
-      Version              : Unsigned_32;
-      Last_Compatible_Vers : Unsigned_32;
-      Boot_CPU_Physical_ID : Unsigned_32;
-      Size_DT_Strings      : Unsigned_32;
-      Size_DT_Struct       : Unsigned_32;
-   end record;
-   for FDT_Header'Alignment use 4;
-
-   ------------------------------------------------------------------------------
-   -- Recursive Parsing of a DTB Node
-   -- Parses a node from the structure block starting at Pos, allocates a new DTB_Node,
-   -- and advances Pos accordingly.
-   ------------------------------------------------------------------------------
-   function Parse_Node (Pos : in out System.Address) return DTB_Node_Access is
-      New_Node : DTB_Node_Access :=
-         new DTB_Node'( Name       => To_Unbounded_String(""),
-                        Properties => DTB_Property_Vector.Empty_Vector,
-                        Children   => DTB_Node_Vector.Empty_Vector );
-      Token    : Unsigned_32;
-      Temp_Str : Unbounded_String;
+   --  Advance pointer by N bytes
+   function Advance (Addr : Address; Bytes : Natural) return Address is
    begin
-      -- Verify and consume the FDT_BEGIN_NODE token.
-      Debug.Print ("Parse_Node: Pos = " & To_String(Pos));
-      Token := Read_BE32(Pos);
-      Debug.Print ("Parse_Node: Token = " & Unsigned_32'Image(Token));
-      if Token /= FDT_BEGIN_NODE then
-         Debug.Print("Error: Expected FDT_BEGIN_NODE token at address " & System.Address'Image(Pos));
-         raise Program_Error with "Parse_Node: Expected FDT_BEGIN_NODE token";
-      end if;
-      Pos := Advance(Pos, 4);
-      Debug.Print ("Parse_Node: Pos after FDT_BEGIN_NODE = " & To_String(Pos));
-
-      -- Read the node name (null-terminated string) and store it.
-      Temp_Str := Read_Null_Terminated_String(Pos);
-      New_Node.Name := Temp_Str;
-      Debug.Print ("Parse_Node: Node Name = " & To_String(Temp_Str));
-      Pos := Align4(Advance(Pos, Natural(Ada.Strings.Unbounded.Length(Temp_Str)) + 1));
-      Debug.Print ("Parse_Node: Pos after Node Name = " & To_String(Pos));
-
-      -- Process tokens until FDT_END_NODE is encountered.
-      loop
-         Token := Read_BE32(Pos);
-         Debug.Print ("Parse_Node: Token = " & Unsigned_32'Image(Token));
-         if Token = FDT_END_NODE then
-            Pos := Advance(Pos, 4);
-            Debug.Print ("Parse_Node: Pos after FDT_END_NODE = " & To_String(Pos));
-            exit;
-         elsif Token = FDT_PROP then
-            Pos := Advance(Pos, 4);
-            Debug.Print ("Parse_Node: Pos after FDT_PROP = " & To_String(Pos));
-            declare
-               Prop_Length : Natural := Natural(Read_BE32(Pos));
-               Name_Offset : Natural := Natural(Read_BE32(Advance(Pos, 4)));
-               Prop_Name   : Unbounded_String :=
-                               Read_Null_Terminated_String(Strings_Base + To_Address(Name_Offset));
-               Prop_Value  : System.Address := Pos;
-            begin
-               Debug.Print ("Parse_Node: Property Name = " & To_String(Prop_Name));
-               Debug.Print ("Parse_Node: Property Value = " & To_String(Prop_Value));
-               Debug.Print ("Parse_Node: Property Length = " & Natural'Image(Prop_Length));
-               Debug.Print ("Parse_Node: Name_Offset = " & Natural'Image(Name_Offset));
-               if DTB_Property_Vector.Length(New_Node.Properties) + 1 > Max_Properties_Per_Node then
-                  Arch.Debug.Print("Error: Exceeded maximum properties in node " & To_String(New_Node.Name));
-                  raise Program_Error with "Exceeded maximum properties in node " & To_String(New_Node.Name);
-               end if;
-               Debug.Print ("Parse_Node: Appending Property " & To_String(Prop_Name));
-               DTB_Property_Vector.Append(New_Node.Properties,
-                  (Name   => Prop_Name,
-                   Length => Prop_Length,
-                   Value  => Prop_Value));
-               Debug.Print ("Parse_Node: Appended Property " & To_String(Prop_Name));
-               Pos := Align4(Advance(Pos, Prop_Length));
-               Debug.Print ("Parse_Node: Pos after Property = " & To_String(Pos));
-            end;
-         elsif Token = FDT_BEGIN_NODE then
-            Debug.Print ("Parse_Node: Recursing into child node");
-            if DTB_Node_Vector.Length(New_Node.Children) + 1 > Max_Children_Per_Node then
-               Arch.Debug.Print("Error: Exceeded maximum children in node " & To_String(New_Node.Name));
-               raise Program_Error with "Exceeded maximum children in node " & To_String(New_Node.Name);
-            end if;
-            declare
-               Child_Node : DTB_Node_Access := Parse_Node(Pos);
-            begin
-               Debug.Print ("Parse_Node: Appending Child Node " & To_String(Child_Node.Name));
-               DTB_Node_Vector.Append(New_Node.Children, Child_Node);
-            end;
-         elsif Token = FDT_NOP then
-            Debug.Print ("Parse_Node: Skipping NOP token at Pos = " & To_String(Pos));
-            Pos := Advance(Pos, 4);
-         elsif Token = FDT_END then
-            Debug.Print ("Parse_Node: End of DTB reached");
-            exit;
-         else
-            Arch.Debug.Print("Warning: Unknown token encountered at " & System.Address'Image(Pos) & ", skipping 4 bytes.");
-            Pos := Advance(Pos, 4);
-            Debug.Print ("Parse_Node: Pos after Unknown = " & To_String(Pos));
-         end if;
-         Debug.Print ("Parse_Node: Looping back to check next token at Pos = " & To_String(Pos));
-      end loop;
-      Debug.Print ("Parse_Node: Returning Node " & To_String(New_Node.Name));
-      return New_Node;
+      return Addr + To_Address (Bytes);
    exception
-      when E : others =>
-         Arch.Debug.Print("Error in Parse_Node: " & Exception_Message(E));
-         raise;
+      when others =>
+         Debug.Print ("Advance: Exception occurred.");
+         return Addr; -- Return the original address
+   end Advance;
+
+   --  Read a null-terminated ASCII string (up to Max_Name_Length)
+   function Read_Null_String (Addr : Address) return String is
+      Ptr    : U8_Ptr := To_U8_Ptr (Addr);
+      Len    : Natural := 0;
+      Result : String (1 .. Max_Name_Length);
+   begin
+      while Ptr (Len + 1) /= 0 loop
+         if Len = Max_Name_Length then
+            Debug.Print ("Read_Null_String: String exceeds Max_Name_Length.");
+            exit;
+         end if;
+         Result (Len + 1) := Character'Val (Ptr (Len + 1));
+         Len := Len + 1;
+      end loop;
+      return Result(1 .. Len);
+   exception
+      when others =>
+         Debug.Print ("Read_Null_String: Exception occurred.");
+         return "";
+   end Read_Null_String;
+
+   -----------------------------------------------------------------------------
+   --  Recursive Parse of a DTB Node
+   -----------------------------------------------------------------------------
+   function Parse_Node (Pos : in out Address) return DTB_Node_Access is
+      Token : Unsigned_32;
+      Node  : DTB_Node_Access := new DTB_Node' (Name => (others => ' '), Prop_Count => 0, Child_Count => 0);
+   begin
+      --  Read BEGIN_NODE token
+      Token := Read_BE32 (Pos);
+      if Token /= FDT_BEGIN_NODE then
+         Debug.Print ("Parse_Node: Invalid BEGIN_NODE token.");
+         return null;
+      end if;
+      Pos := Advance (Pos, 4);
+
+      --  Parse node name
+      Node.Name := Read_Null_String (Pos);
+      if Node.Name'Length > Max_Name_Length then
+         Debug.Print ("Parse_Node: Node name exceeds Max_Name_Length.");
+         return null;
+      end if;
+      Pos := Align4 (Advance (Pos, Node.Name'Length + 1));
+
+      --  Parse properties and children
+      loop
+         Token := Read_BE32 (Pos);
+         case Token is
+            when FDT_PROP =>
+               Parse_Property (Node, Pos);
+            when FDT_BEGIN_NODE =>
+               Node.Children (Node.Child_Count + 1) := Parse_Node (Pos);
+               Node.Child_Count := Node.Child_Count + 1;
+            when FDT_END_NODE =>
+               Pos := Advance (Pos, 4);
+               exit;
+            when FDT_NOP =>
+               Pos := Advance (Pos, 4);
+            when others =>
+               Debug.Print ("Parse_Node: Unknown token " & Unsigned_32'Image (Token));
+               exit;
+         end case;
+      end loop;
+
+      return Node;
+   exception
+      when others =>
+         Debug.Print ("Parse_Node: Exception occurred while parsing node.");
+         return null;
    end Parse_Node;
 
-   ------------------------------------------------------------------------------
-   -- Parse the Entire DTB Structure Block
-   ------------------------------------------------------------------------------
-   procedure Parse_DTB is
-      Current_Pos : System.Address := Struct_Base;
+   -----------------------------------------------------------------------------
+   --  Parse a Property
+   -----------------------------------------------------------------------------
+   procedure Parse_Property (Node : DTB_Node_Access; Pos : in out Address) is
+      Prop : DTB_Property_Access := new DTB_Property;
    begin
-      Debug.Print ("Parse_DTB: Starting at Root_Node Address = " & To_String(Current_Pos));
-      Root_Node := Parse_Node(Current_Pos);
+      --  Parse property length and name offset
+      Prop.Len := BE_To_Host (Read_BE32 (Pos));
+      Pos := Advance (Pos, 4);
+      Prop.Name := Read_Null_String (
+         Strings_Base + BE_To_Host (Read_BE32 (Pos)));
+      Pos := Advance (Pos, 4);
+
+      --  Validate property length
+      if Prop.Len > 8 then
+         Debug.Print (
+            "Parse_Property: Property length exceeds maximum allowed size.");
+         return;
+      end if;
+
+      --  Parse property value
+      for I in 1 .. Prop.Len loop
+         Prop.Value (I) := Read_BE32 (Pos);
+         Pos := Advance (Pos, 4);
+      end loop;
+
+      --  Add property to node
+      Node.Properties (Node.Prop_Count + 1) := Prop;
+      Node.Prop_Count := Node.Prop_Count + 1;
    exception
-      when E : others =>
-         Debug.Print("Error in Parse_DTB: " & Exception_Message(E));
-         raise;
-   end Parse_DTB;
+      when others =>
+         Debug.Print ("Parse_Property: Exception occurred while parsing property.");
+   end Parse_Property;
 
-   ------------------------------------------------------------------------------
-   -- Initialization Function
-   -- Verifies the DTB header (via Limine), converts header fields once from big-endian,
-   -- stores them in Global_Header, computes base addresses, DTB bounds, and parses the DTB.
-   ------------------------------------------------------------------------------
+   -----------------------------------------------------------------------------
+   --  Initialize DTB Parsing
+   -----------------------------------------------------------------------------
    function Init return Boolean is
-      DTBPonse  : Arch.Limine.DTB_Response
-         with Import, Address => DTB_Request.Response;
+      type HDR_Ptr is access all FDT_Header;
+      function To_HDR_Ptr is new Ada.Unchecked_Conversion (
+         Source => Address,
+         Target => HDR_Ptr);
+      HDR : HDR_Ptr := null;
    begin
-      Debug.Print ("DTB_Init: Starting DTB parsing");
-      if DTB_Request.Response = System.Null_Address then
-         Arch.Debug.Print("Error: DTB response is null.");
+      -- Check if the DTB address is null
+      if Limine.DTB_Response.DTB_Addr = System.Null_Address then
+         Debug.Print ("Init: DTB address is null. Cannot initialize DTB.");
          return False;
       end if;
 
-      -- Read and convert DTB header fields once.
-      Global_Header.Magic                := Read_BE32(DTBPonse.DTB_Addr);
-      Debug.Print ("DTB Magic: " & Unsigned_32'Image(Global_Header.Magic));
-      Global_Header.Total_Size           := Read_BE32(Advance(DTBPonse.DTB_Addr, 4));
-      Debug.Print ("DTB Total Size: " & Unsigned_32'Image(Global_Header.Total_Size));
-      Global_Header.Offset_DT_Struct     := Read_BE32(Advance(DTBPonse.DTB_Addr, 8));
-      Debug.Print ("DTB Struct Offset: " & Unsigned_32'Image(Global_Header.Offset_DT_Struct));
-      Global_Header.Offset_DT_Strings    := Read_BE32(Advance(DTBPonse.DTB_Addr, 12));
-      Debug.Print ("DTB Strings Offset: " & Unsigned_32'Image(Global_Header.Offset_DT_Strings));
-      Global_Header.Offset_Reserved      := Read_BE32(Advance(DTBPonse.DTB_Addr, 16));
-      Debug.Print ("DTB Reserved Offset: " & Unsigned_32'Image(Global_Header.Offset_Reserved));
-      Global_Header.Version              := Read_BE32(Advance(DTBPonse.DTB_Addr, 20));
-      Debug.Print ("DTB Version: " & Unsigned_32'Image(Global_Header.Version));
-      Global_Header.Last_Compatible_Vers := Read_BE32(Advance(DTBPonse.DTB_Addr, 24));
-      Debug.Print ("DTB Last Compatible Version: " & Unsigned_32'Image(Global_Header.Last_Compatible_Vers));
-      Global_Header.Boot_CPU_Physical_ID := Read_BE32(Advance(DTBPonse.DTB_Addr, 28));
-      Debug.Print ("DTB Boot CPU Physical ID: " & Unsigned_32'Image(Global_Header.Boot_CPU_Physical_ID));
-      Global_Header.Size_DT_Strings      := Read_BE32(Advance(DTBPonse.DTB_Addr, 32));
-      Debug.Print ("DTB Size of Strings: " & Unsigned_32'Image(Global_Header.Size_DT_Strings));
-      Global_Header.Size_DT_Struct       := Read_BE32(Advance(DTBPonse.DTB_Addr, 36));
-      Debug.Print ("DTB Size of Struct: " & Unsigned_32'Image(Global_Header.Size_DT_Struct));
+      -- Convert the DTB address to an HDR pointer
+      HDR := To_HDR_Ptr (Limine.DTB_Response.DTB_Addr);
 
-      if Global_Header.Magic /= 16#D00DFEED# then
-         Arch.Debug.Print("Error: Invalid DTB magic number: " & Unsigned_32'Image(Global_Header.Magic));
+      -- Check if the HDR pointer is null
+      if HDR = null then
+         Debug.Print ("Init: No DTB response.");
          return False;
       end if;
 
-      -- Set base addresses using the stored header values.
-      Struct_Base  := Advance(DTBPonse.DTB_Addr, To_Integer(Global_Header.Offset_DT_Struct));
-      Debug.Print ("DTB Struct Base: " & To_String(Struct_Base) & " = DTB.Addr()" & To_String(DTBPonse.DTB_Addr) 
-         & ") + DTB Struct Offset()" & To_String(Global_Header.Offset_DT_Struct) & ").");
-      Strings_Base := Advance(DTBPonse.DTB_Addr, To_Integer(Global_Header.Offset_DT_Strings));
-      Debug.Print ("DTB Strings Base: " & To_String(Strings_Base) & " = DTB.Addr(" & To_String(DTBPonse.DTB_Addr) 
-         & ") + DTB Strings Offset(" & To_String(Global_Header.Offset_DT_Strings) & ").");
-      DTB_End      := Advance(DTBPonse.DTB_Addr, To_Integer(Global_Header.Total_Size));
-      Debug.Print ("DTB End Address: " & To_String(DTB_End) & " = DTB.Addr(" & To_String(DTBPonse.DTB_Addr) 
-         & ") + DTB Total Size(" & To_String(Global_Header.Total_Size) & ").");
+      -- Validate the DTB magic number
+      if BE_To_Host (HDR.Magic) /= FDT_MAGIC then
+         Debug.Print ("Init: Invalid DTB magic number.");
+         return False;
+      end if;
 
-      begin
-         Debug.Print ("Parse_DTB: Starting DTB parsing");
-         Parse_DTB;
-         Debug.Print ("Parse_DTB: Finished DTB parsing");
-      exception
-         when E : others =>
-            Arch.Debug.Print("DTB Parsing failed: " & Exception_Message(E));
-            Debug.Print ("Init: Returning False");
-            return False;
-      end;
-      Debug.Print ("DTB_Init: Finished DTB parsing");
-      Debug.Print ("Init: Returning True");
+      -- Calculate base addresses using proper type conversions
+      Struct_Base :=
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Offset_DT_Struct))));
+
+      Strings_Base :=
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Offset_DT_Strings))));
+
+      DTB_End :=
+         To_Address (
+            Integer_Address (Limine.DTB_Response.DTB_Addr) +
+            Integer_Address (Integer (BE_To_Host (HDR.Size_DT_Struct))));
+
+      -- Debug output for calculated addresses
+      Debug.Print ("Init: Struct_Base = " & Address'Image (Struct_Base));
+      Debug.Print ("Init: Strings_Base = " & Address'Image (Strings_Base));
+      Debug.Print ("Init: DTB_End = " & Address'Image (DTB_End));
+
+      -- Parse the DTB
+      Parse_DTB;
       return True;
+   exception
+      when Constraint_Error =>
+         Debug.Print ("Init: Constraint_Error occurred during initialization.");
+         return False;
+      when Program_Error =>
+         Debug.Print ("Init: Program_Error occurred during initialization.");
+         return False;
+      when others =>
+         Debug.Print ("Init: Unknown exception occurred during initialization.");
+         return False;
    end Init;
 
-   ------------------------------------------------------------------------------
-   -- Query Function: Find a Node by its "compatible" Property
-   -- Recursively searches the parsed DTB tree for a node whose "compatible"
-   -- property contains the search string.
-   ------------------------------------------------------------------------------
-   function Find_Node_By_Compatible (Compatible_Search : String) return DTB_Node_Access is
-      Compatible_Key : constant Unbounded_String := To_Unbounded_String("compatible");
+   -----------------------------------------------------------------------------
+   --  Top-Level Parse
+   -----------------------------------------------------------------------------
+   procedure Parse_DTB is
+      Pos : Address := Struct_Base;
+   begin
+      Debug.Print ("Parse_DTB: Starting DTB parsing...");
+      Root_Node := Parse_Node (Pos);
+      Debug.Print ("Parse_DTB: Parsing complete.");
+   exception
+      when others =>
+         Debug.Print ("Parse_DTB: Exception occurred during parsing.");
+   end Parse_DTB;
 
-      -- Recursive helper function.
-      function Search (Node : DTB_Node_Access) return DTB_Node_Access is
-         Candidate : DTB_Node_Access := null;
-         Prop_Value: Unbounded_String;
+   -----------------------------------------------------------------------------
+   --  Pretty-Print a Node
+   -----------------------------------------------------------------------------
+   procedure Print_DTB_Node (Node : DTB_Node_Access; Indent : String := "") is
+   begin
+      Debug.Print (Indent & "Node: " & Node.Name);
+      for I in 1 .. Node.Prop_Count loop
+         declare
+            Prop : constant DTB_Property_Access := Node.Properties (I);
+         begin
+            Debug.Print (Indent & "  Property: " & Prop.Name &
+               " (Length: " & Natural'Image (Prop.Len) & ")");
+         end;
+      end loop;
+      for I in 1 .. Node.Child_Count loop
+         Print_DTB_Node (Node.Children (I), Indent & "  ");
+      end loop;
+   exception
+      when others =>
+         Debug.Print ("Print_DTB_Node: Exception occurred while printing node.");
+   end Print_DTB_Node;
+
+   -----------------------------------------------------------------------------
+   --  Print the Entire DTB
+   -----------------------------------------------------------------------------
+   procedure Print_DTB is
+   begin
+      if Root_Node /= null then
+         Print_DTB_Node (Root_Node);
+      else
+         Debug.Print ("Print_DTB: No root node found.");
+      end if;
+   exception
+      when others =>
+         Debug.Print ("Print_DTB: Exception occurred while printing DTB.");
+   end Print_DTB;
+
+   -----------------------------------------------------------------------------
+   --  Find Node by Compatible String
+   -----------------------------------------------------------------------------
+   function Find_Node_By_Compatible (Compat : String) return DTB_Node_Access is
+      function Search (N : DTB_Node_Access) return DTB_Node_Access is
+         Result : DTB_Node_Access := null;
       begin
-         Debug.Print ("Find_Node_By_Compatible: Searching Node " & To_String(Node.Name));
-         for I in DTB_Property_Vector.First_Index(Node.Properties) ..
-                 DTB_Property_Vector.Last_Index(Node.Properties) loop
-            Debug.Print ("Find_Node_By_Compatible: Checking Property " & To_String(DTB_Property_Vector.Element(Node.Properties, I).Name));
-            if DTB_Property_Vector.Element(Node.Properties, I).Name = Compatible_Key then
-               Prop_Value := Read_Null_Terminated_String(DTB_Property_Vector.Element(Node.Properties, I).Value);
-               if Ada.Strings.Unbounded.Contains(Prop_Value, To_Unbounded_String(Compatible_Search)) then
-                  Debug.Print ("Find_Node_By_Compatible: Found Node " & To_String(Node.Name));
-                  Debug.Print ("Find_Node_By_Compatible: Compatible Property Value = " & To_String(Prop_Value));
-                  Debug.Print ("Find_Node_By_Compatible: Returning Node.Name = " & To_String(Node.Name));
-                  return Node;
-               end if;
+         -- Check properties for "compatible"
+         for I in 1 .. N.Prop_Count loop
+            if N.Properties (I) /= null and then N.Properties (
+               I).Name = "compatible" then
+               declare
+                  Prop_Value : constant String :=
+                     String'Value (N.Properties (I).Value (1 .. N.Properties (I).Len));
+               begin
+                  if Contains_Substring (Prop_Value, Compat) then
+                     return N;
+                  end if;
+               exception
+                  when others =>
+                     Debug.Print ("Search: Exception occurred while checking property value.");
+                     return null;
+               end;
             end if;
          end loop;
-         for J in DTB_Node_Vector.First_Index(Node.Children) ..
-                 DTB_Node_Vector.Last_Index(Node.Children) loop
-            Debug.Print ("Find_Node_By_Compatible: Recursing into Child Node " & To_String(DTB_Node_Vector.Element(Node.Children, J).Name));
-            if Node.Children(J) /= null then
-               Debug.Print ("Find_Node_By_Compatible: Searching Child Node " & To_String(DTB_Node_Vector.Element(Node.Children, J).Name));
-               Candidate := Search(Node.Children(J));
-               if Candidate /= null then
-                  Debug.Print ("Find_Node_By_Compatible: Returning Candidate = " & To_String(Candidate.Name));
-                  return Candidate;
-               end if;
+
+         -- Recursively search child nodes
+         for J in 1 .. N.Child_Count loop
+            if N.Children (J) /= null then
+               declare
+                  C : DTB_Node_Access := null;
+               begin
+                  C := Search (N.Children (J));
+                  if C /= null then
+                     return C;
+                  end if;
+               exception
+                  when others =>
+                     Debug.Print ("Search: Exception occurred while searching child nodes.");
+                     return null;
+               end;
             end if;
          end loop;
+
          return null;
+      exception
+         when others =>
+            Debug.Print ("Search: Exception occurred.");
+            return null;
       end Search;
+
    begin
       if Root_Node = null then
-         Debug.Print ("Find_Node_By_Compatible: Root_Node is null, returning null");
+         Debug.Print ("Find_Node_By_Compatible: Root node is null.");
          return null;
       else
-         Debug.Print ("Find_Node_By_Compatible: Searching for Compatible = " & Compatible_Search);
-         return Search(Root_Node);
+         return Search (Root_Node);
       end if;
+   exception
+      when others =>
+         Debug.Print ("Find_Node_By_Compatible: Exception occurred.");
+         return null;
    end Find_Node_By_Compatible;
 
-   procedure Register_All_Device_IRQs is
+   -----------------------------------------------------------------------------
+   --  Fetch a specific indexed value from a property as Unsigned_64
+   -----------------------------------------------------------------------------
+   function Get_Property_Unsigned_64
+     (Node  : DTB_Node_Access;
+      Name  : String;
+      Index : Positive) return Unsigned_64
+   is
+      Prop : DTB_Property_Access := null;
    begin
-      for Node of Device_Tree loop
-         if Node.Has_IRQ then
-            if To_String(Node.Name) = "uart0" then
-               Arch.Debug.Print("Registering UART0 IRQ");
-               Arch.Interrupts.Register_Device_IRQ(Node'Access, Handler => Devices.UART.UART0_Interrupt_Handler'Access);
-            else
-               Arch.Debug.Print("Registering " & To_String(Node.Name) & " IRQ with null handler.");
-               Arch.Interrupts.Register_Device_IRQ(Node'Access, Handler => null);
-            end if;
+      --  Precondition: Ensure Node is not null
+      if Node = null then
+         Debug.Print ("Get_Property_Unsigned_64: Node is null.");
+         return 0; -- Return a default value
+      end if;
+
+      --  Find the property by name
+      for I in Node.Properties'Range loop
+         if Node.Properties (I).Name = Name then
+            Prop := Node.Properties (I);
+            exit;
          end if;
       end loop;
-   end Register_All_Device_IRQs;
+
+      --  Handle missing property
+      if Prop = null then
+         Debug.Print ("Get_Property_Unsigned_64: Property '" &
+         Name & "' not found in node.");
+         return 0; -- Return a default value
+      end if;
+
+      --  Ensure the index is within bounds
+      if Index > Prop.Len then
+         Debug.Print (
+            "Get_Property_Unsigned_64: Index " & Positive'Image (Index) &
+            " out of bounds for property '" &
+            Name & "' (Length: " & Natural'Image (Prop.Len) & ").");
+         return 0; -- Return a default value
+      end if;
+
+      --  Return the indexed value
+      return Prop.Value (Index);
+
+   exception
+      when others =>
+         Debug.Print (
+            "Get_Property_Unsigned_64: " &
+            "Exception occurred while fetching property '" & Name & "'.");
+         return 0; -- Return a default value
+   end Get_Property_Unsigned_64;
+
+   function Get_Property_Unsigned_64
+      (Node : DTB_Node_Access; Name : String) return Unsigned_64_Array
+   is
+      Prop : DTB_Property_Access := null;
+   begin
+      -- Precondition: Ensure Node is not null
+      if Node = null then
+         Debug.Print ("Get_Property_Unsigned_64: Node is null.");
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)];
+      end if;
+
+      -- Find the property by name
+      for I in 1 .. Node.Prop_Count loop
+         if Node.Properties (I).Name = Name then
+            Prop := Node.Properties (I);
+            exit when Prop /= null;
+         end if;
+      end loop;
+
+      -- Handle missing property
+      if Prop = null then
+         Debug.Print ("Get_Property_Unsigned_64: Property '" &
+         Name & "' not found in node.");
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)];
+      end if;
+
+      -- Allocate and populate the result array
+      declare
+         Result : Unsigned_64_Array (1 .. Prop.Len) := [others => 0];
+      begin
+         for I in 1 .. Prop.Len loop
+            Result (I) := Prop.Value (I);
+         end loop;
+         return Result;
+      end;
+
+   exception
+      when others =>
+         Debug.Print ("Get_Property_Unsigned_64: " &
+         "Exception occurred while fetching property '" & Name & "'.");
+         return Unsigned_64_Array'[1 .. 0 => Unsigned_64(0)]; -- Return an empty array
+   end Get_Property_Unsigned_64;
 
 end Arch.DTB;

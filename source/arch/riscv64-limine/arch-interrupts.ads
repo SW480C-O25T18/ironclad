@@ -1,6 +1,5 @@
 --  arch-interrupts.ads: Specification of interrupt utilities for RISC-V64 architecture.
---  Provides support for dynamic IRQ registration, dispatching, and device IRQ handling.
---  Copyright (C) 2025 Sean C. Weeks
+--  Copyright (C) 2025 Sean C. Weeks - badrock1983
 --
 --  This program is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
@@ -15,107 +14,145 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-with Interfaces; use Interfaces;
-with System;           -- For System.Address
-with Arch.DTB;         -- For DTB node access
+with Interfaces;        use Interfaces;
+with System;            use System;
+with Arch.CLINT;        use Arch.CLINT;
+with Arch.PLIC;         use Arch.PLIC;
+with Arch.DTB;          use Arch.DTB;
 
 package Arch.Interrupts with SPARK_Mode => Off is
+
    ---------------------------------------------------------------------------
-   -- Types and Constants
+   --  Symbolic scause codes and interrupt bit mask
    ---------------------------------------------------------------------------
+   Interrupt_Bit         : constant Unsigned_64 :=
+                              Shift_Left (Unsigned_64 (1), 63);
+   CLINT_SW_INT_CODE     : constant Unsigned_64 := Interrupt_Bit + 3;
+   CLINT_TIMER_INT_CODE1 : constant Unsigned_64 := Interrupt_Bit + 5;
+   CLINT_TIMER_INT_CODE2 : constant Unsigned_64 := Interrupt_Bit + 7;
+   SYSCALL_INT_CODE      : constant Unsigned_64 := 8;  -- exception (ecall)
+   PLIC_EXT_INT_CODE1    : constant Unsigned_64 := Interrupt_Bit + 9;
+   PLIC_EXT_INT_CODE2    : constant Unsigned_64 := Interrupt_Bit + 11;
 
-   -- Type for IRQ handler procedures
-   type IRQ_Handler is access procedure;
+   Lazy_FP_Fault_Code    : constant Unsigned_64 := 2;
 
-   -- Maximum number of IRQs supported
-   Max_IRQs : constant Integer := 255;
+   ---------------------------------------------------------------------------
+   --  Decode Functions
+   ---------------------------------------------------------------------------
+   function Cause_Code (S : Unsigned_64) return Unsigned_64;
+   pragma Inline (Cause_Code);
+   --  Extract cause number by clearing interrupt bit.
 
-   -- Frame type for interrupt handling (architecture-specific)
+   function Is_Interrupt (S : Unsigned_64) return Boolean;
+   pragma Inline (Is_Interrupt);
+   --  True if scause indicates an interrupt.
+
+   ---------------------------------------------------------------------------
+   --  Thread Control Block context offset (bytes)
+   ---------------------------------------------------------------------------
+   TCB_CONTEXT_OFFSET : constant Natural := 368;
+   function Get_TCB_OFFSET return Unsigned_64;
+   pragma Inline (Get_TCB_OFFSET);
+   --  Byte offset of saved Frame in the TCB.
+
+   ---------------------------------------------------------------------------
+   --  Trap Vector Mode Configuration
+   ---------------------------------------------------------------------------
+   procedure Configure_Trap_Vector;
+   --  Detect and enable vectored vs direct trap mode at runtime.
+
+   ---------------------------------------------------------------------------
+   --  Interrupt Frame Layout
+   ---------------------------------------------------------------------------
    type Frame is record
-      -- Caller-Saved Registers:
-      x1_ra   : Unsigned_64;  -- x1 (ra): Return address (caller-saved) @ 0
-      x4_tp   : Unsigned_64;  -- x4 (tp): Thread pointer (volatile) @ 8
-      x5_t0   : Unsigned_64;  -- x5 (t0): Temporary (caller-saved) @ 16
-      x6_t1   : Unsigned_64;  -- x6 (t1): Temporary (caller-saved) @ 24
-      x7_t2   : Unsigned_64;  -- x7 (t2): Temporary (caller-saved) @ 32
-      x10_a0  : Unsigned_64;  -- x10 (a0): Function argument/return (caller-saved) @ 40
-      x11_a1  : Unsigned_64;  -- x11 (a1): Function argument/return (caller-saved) @ 48
-      x12_a2  : Unsigned_64;  -- x12 (a2): Function argument (caller-saved) @ 56
-      x13_a3  : Unsigned_64;  -- x13 (a3): Function argument (caller-saved) @ 64
-      x14_a4  : Unsigned_64;  -- x14 (a4): Function argument (caller-saved) @ 72
-      x15_a5  : Unsigned_64;  -- x15 (a5): Function argument (caller-saved) @ 80
-      x16_a6  : Unsigned_64;  -- x16 (a6): Function argument (caller-saved) @ 88
-      x17_a7  : Unsigned_64;  -- x17 (a7): Function argument / syscall number (caller-saved) @ 96
-      x28_t3  : Unsigned_64;  -- x28 (t3): Temporary (caller-saved) @ 104
-      x29_t4  : Unsigned_64;  -- x29 (t4): Temporary (caller-saved) @ 112
-      x30_t5  : Unsigned_64;  -- x30 (t5): Temporary (caller-saved) @ 120
-      x31_t6  : Unsigned_64;  -- x31 (t6): Temporary (caller-saved) @ 128
-
-      -- Callee-Saved Registers:
-      x2_sp   : Unsigned_64;  -- x2 (sp): Stack pointer (callee-saved) @ 136
-      x3_gp   : Unsigned_64;  -- x3 (gp): Global pointer (callee-saved) @ 144
-      x8_s0   : Unsigned_64;  -- x8 (s0/fp): Saved register / frame pointer (callee-saved) @ 152
-      x9_s1   : Unsigned_64;  -- x9 (s1): Saved register (callee-saved) @ 160
-      x18_s2  : Unsigned_64;  -- x18 (s2): Saved register (callee-saved) @ 168
-      x19_s3  : Unsigned_64;  -- x19 (s3): Saved register (callee-saved) @ 176
-      x20_s4  : Unsigned_64;  -- x20 (s4): Saved register (callee-saved) @ 184
-      x21_s5  : Unsigned_64;  -- x21 (s5): Saved register (callee-saved) @ 192
-      x22_s6  : Unsigned_64;  -- x22 (s6): Saved register (callee-saved) @ 200
-      x23_s7  : Unsigned_64;  -- x23 (s7): Saved register (callee-saved) @ 208
-      x24_s8  : Unsigned_64;  -- x24 (s8): Saved register (callee-saved) @ 216
-      x25_s9  : Unsigned_64;  -- x25 (s9): Saved register (callee-saved) @ 224
-      x26_s10 : Unsigned_64;  -- x26 (s10): Saved register (callee-saved) @ 232
-      x27_s11 : Unsigned_64;  -- x27 (s11): Saved register (callee-saved) @ 240
-
-      -- Control/Status Registers:
-      sepc    : Unsigned_64;  -- Exception program counter (resume address) @ 248
-      scause  : Unsigned_64;  -- Trap cause (provided by hardware) @ 256
-      stval   : Unsigned_64;  -- Trap value (e.g., faulting address) @ 264
-      sstatus : Unsigned_64;  -- Supervisor status register (includes SPP bit) @ 272
-
-      -- Floating-Point Context Pointer (for lazy FP state saving)
-      FP_Context_Ptr : System.Address := System.Null_Address; -- @ 280
-   end record
-   with Pack;
-
-   pragma Assert (x1_ra'Position       = 0);
-   pragma Assert (x4_tp'Position       = 8);
-   pragma Assert (x5_t0'Position       = 16);
-   pragma Assert (x17_a7'Position      = 96);
-   pragma Assert (x31_t6'Position      = 128);
-   pragma Assert (x3_gp'Position       = 144);
-   pragma Assert (x27_s11'Position     = 240);
-   pragma Assert (sepc'Position        = 248);
-   pragma Assert (scause'Position      = 256);
-   pragma Assert (sstatus'Position     = 272);
-   pragma Assert (FP_Context_Ptr'Position = 280);
+      --  Caller‑saved registers
+      x1_ra,  x4_tp,  x5_t0,  x6_t1,  x7_t2   : Unsigned_64;
+      x10_a0, x11_a1, x12_a2, x13_a3          : Unsigned_64;
+      x14_a4, x15_a5, x16_a6, x17_a7          : Unsigned_64;
+      x28_t3, x29_t4, x30_t5, x31_t6          : Unsigned_64;
+      --  Callee‑saved registers
+      x2_sp, x3_gp, x8_s0, x9_s1              : Unsigned_64;
+      x18_s2, x19_s3, x20_s4, x21_s5          : Unsigned_64;
+      x22_s6, x23_s7, x24_s8, x25_s9          : Unsigned_64;
+      x26_s10, x27_s11                        : Unsigned_64;
+      --  Control/Status registers
+      sepc, scause, stval, sstatus            : Unsigned_64;
+      fcsr                                    : Unsigned_64;
+      --  Lazy floating-point context pointer
+      FP_Context_Ptr : System.Address := System.Null_Address;
+   end record with Pack;
+   type Frame_Ptr is access all Frame;
+   for Frame_Ptr'Size use Frame'Size;
+   for Frame'Alignment use 8;
+   for Frame'Address use 8;
 
    ---------------------------------------------------------------------------
-   -- Initialization
+   --  IRQ Handlers Table
    ---------------------------------------------------------------------------
-
-   procedure Initialize;
-
-   ---------------------------------------------------------------------------
-   -- IRQ Registration and Dispatching
-   ---------------------------------------------------------------------------
-
-   procedure Register_IRQ (IRQ : Integer; Handler : IRQ_Handler);
-   procedure Unregister_IRQ (IRQ : Integer);
-   procedure Handle_Interrupt (Frame_Ptr : in out Frame);
-   procedure Handle_Trap (Frame_Ptr : access Frame);
+   type IRQ_Handler is access procedure;
+   Max_IRQs : constant Integer := 255;
+   type IRQ_Table_Type is array (0 .. Max_IRQs) of IRQ_Handler;
+   IRQ_Table  : IRQ_Table_Type := (others => null);
+   IRQ_Counts : array (0 .. Max_IRQs) of Natural := (others => 0);
 
    ---------------------------------------------------------------------------
-   -- Device IRQ Registration
+   --  IRQ Dispatch Metrics
    ---------------------------------------------------------------------------
+   function Get_IRQ_Count (IRQ : Integer) return Natural
+     with Pre => IRQ in IRQ_Table'Range;
+   --  Return number of times IRQ has been dispatched.
 
-   procedure Register_Device_IRQ (Node : access Arch.DTB.DTB_Node; Handler : IRQ_Handler);
+   procedure Reset_IRQ_Count (IRQ : Integer)
+     with Pre => IRQ in IRQ_Table'Range;
+   --  Reset dispatch count for IRQ to zero.
 
    ---------------------------------------------------------------------------
-   -- Floating-Point Context Management
+   --  Initialization
    ---------------------------------------------------------------------------
+   procedure Initialize
+     with Post => (CLINT_Enabled or PLIC.Is_Enabled);
+   --  Setup CLINT/PLIC and configure trap mode.
 
-   procedure Save_FP_Context (Frame_Ptr : in out Frame);
-   procedure Restore_FP_Context (Frame_Ptr : in out Frame);
+   ---------------------------------------------------------------------------
+   --  Dynamic IRQ Registration
+   ---------------------------------------------------------------------------
+   procedure Register_IRQ
+     (IRQ     : Integer;
+      Handler : IRQ_Handler)
+     with Pre => IRQ in IRQ_Table'Range and Handler /= null;
+   --  Register a handler for IRQ, atomic with interrupts disabled.
+
+   procedure Unregister_IRQ
+     (IRQ : Integer)
+     with Pre => IRQ in IRQ_Table'Range;
+   --  Unregister handler for IRQ.
+
+   ---------------------------------------------------------------------------
+   --  Trap Entry/Exit (Assembler Stubs)
+   ---------------------------------------------------------------------------
+   procedure trap_entry;
+   pragma Import (Assembler, trap_entry, "trap_entry");
+
+   procedure trap_exit;
+   pragma Import (Assembler, trap_exit, "trap_exit");
+
+   ---------------------------------------------------------------------------
+   --  Core IRQ/Trap Dispatch
+   ---------------------------------------------------------------------------
+   procedure Handle_Interrupt
+     (Frame_Ptr : in out Frame);
+
+   procedure Handle_Trap
+     (Frame_Ptr : access Frame)
+     with Pre => Frame_Ptr /= null and then Frame_Ptr.sepc mod 4 = 0;
+   pragma Export (C, Handle_Trap, "Handle_Trap");
+
+   ---------------------------------------------------------------------------
+   --  Device-tree IRQ Convenience
+   ---------------------------------------------------------------------------
+   procedure Register_Device_IRQ
+     (Node    : access DTB_Node_Access;
+      Handler : IRQ_Handler)
+     with Pre => Node /= null and Handler /= null;
 
 end Arch.Interrupts;

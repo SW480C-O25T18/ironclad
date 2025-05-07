@@ -1,106 +1,81 @@
---  arch-exceptions.ads: Specification of Core Local Interruptor (CLINT) utilities.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
---
---  This program is free software: you can redistribute it and/or modify
+--  arch-clint.ads: CLINT driver for riscv64-limine, SBI-friendly
+--  Copyright (C) 2025 Sean Weeks
+--  
+--  This file is part of Ironclad.
+--  
+--  Ironclad is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
 --  the Free Software Foundation, either version 3 of the License, or
 --  (at your option) any later version.
---
+--  
 --  This program is distributed in the hope that it will be useful,
 --  but WITHOUT ANY WARRANTY; without even the implied warranty of
 --  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
---
+--  
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.
+--  along with Ironclad.  If not, see <https://www.gnu.org/licenses/>.
 
 with System;
-with Interfaces; use Interfaces;
+with Interfaces;
+with Arch.Debug;
+with Lib.Panic;
+with Arch.FDT;
+with Arch.CPU;
+with Arch.SBI;
 
-package Arch.CLINT with SPARK_Mode => Off is
-   ------------------------------------------------------------------------------
-   --  Arch.CLINT
-   --
-   --  This package encapsulates the Core Local Interruptor (CLINT) for RISCV64.
-   --  It supports dynamic configuration based on DTB (or other boot configuration)
-   --  parameters. All configuration parameters not dictated by the RISCV64 ISA are
-   --  set via Set_CLINT_Configuration. Default values are provided to allow basic
-   --  functionality even if DTB parsing is incomplete.
-   --
-   --  The CLINT manages:
-   --    - Software interrupts (msip registers) for each hart:
-   --         Address = CLINT_Base + MSIP_Offset + (Hart_ID * 4)
-   --
-   --    - Timer registers:
-   --         mtime (global, 64-bit) at CLINT_Base + MTime_Offset
-   --         mtimecmp (per hart, 64-bit) at
-   --             CLINT_Base + MTimecmp_Offset + (Hart_ID * 8)
-   --
-   --  A Boolean flag (Enabled) indicates whether the CLINT is supported. When
-   --  disabled, all functions report the lack of support and return safe defaults.
-   ------------------------------------------------------------------------------
+package Arch.CLINT is
+   pragma Pure;
 
-   
+   subtype U32 is Interfaces.Unsigned_32;
+   subtype U64 is Interfaces.Unsigned_64;
+   subtype Address is System.Address;
 
-   procedure Set_CLINT_Configuration (
-     Base_Address     : System.Address := System'To_Address(16#02000000#);
-     MSIP_Offset      : Unsigned_64   := 0;
-     MTime_Offset     : Unsigned_64   := 16#BFF8#;
-     MTimecmp_Offset  : Unsigned_64   := 16#4000#;
-     Enabled          : Boolean       := True
-   )
-   with Pre  => True,
-        Post => (Get_CLINT_Base = Base_Address) and then 
-                (Get_MSIP_Offset = MSIP_Offset) and then 
-                (Get_MTime_Offset = MTime_Offset) and then 
-                (Get_MTimecmp_Offset = MTimecmp_Offset) and then 
-                (CLINT_Enabled = Enabled);
-   
-   function Get_CLINT_Base return System.Address;
-   function Get_MSIP_Offset return Unsigned_64;
-   function Get_MTime_Offset return Unsigned_64;
-   function Get_MTimecmp_Offset return Unsigned_64;
-   function CLINT_Enabled return Boolean;
+   --  CLINT register layout constants
+   MSIP_Stride     : constant U32 := 4;
+   MTIME_Offset    : constant U64 := 16#4000#;
+   MTIMECMP_Offset : constant U64 := 16#4008#;
 
-   ------------------------------------------------------------------------------
-   --  Software Interrupt Management
-   ------------------------------------------------------------------------------
-   procedure Set_Software_Interrupt (Hart_ID : Unsigned_64; Value : Boolean)
-      with Inline,
-           Pre  => Hart_ID >= 0,
-           Post => True;
+   --  Legacy SBI extension IDs
+   Legacy_EID_Time       : constant U64 := 16#00#;
+   Legacy_EID_ClearIPI   : constant U64 := 16#03#;
+   Legacy_EID_SendIPI    : constant U64 := 16#04#;
 
-   procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64)
-      with Inline,
-           Pre  => Hart_ID >= 0,
-           Post => True;
+   --  Ratified SBI extension IDs
+   Current_EID_TIME      : constant U64 := 16#54494D45#;  -- 'TIME'
+   Current_EID_sPI       : constant U64 := 16#735049#;    -- 'sPI'
 
-   function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean
-      with Inline,
-           Pre  => Hart_ID >= 0,
-           Post => True;
+   --  Mode selection flags
+   Use_SBI_Time  : Boolean := False;
+   Use_MMIO_Time : Boolean := False;
+   Use_SBI_IPI   : Boolean := False;
+   Use_MMIO_IPI  : Boolean := False;
 
-   ------------------------------------------------------------------------------
-   --  Timer Management
-   ------------------------------------------------------------------------------
-   function Get_MTime return Unsigned_64
-      with Inline,
-           Post => True;
+   --  CLINT overall enable
+   function Is_Enabled return Boolean;
 
-   procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64)
-      with Inline,
-           Pre  => Hart_ID >= 0,
-           Post => Get_Timer_Compare(Hart_ID) = Time;
+   --  Initialization
+   procedure Initialize;
 
-   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64
-      with Inline,
-           Pre  => Hart_ID >= 0,
-           Post => True;
+   --  Software IPI (MSIP)
+   procedure Set_Software_Interrupt (Target : U32);
+   procedure Clear_Software_Interrupt (Target : U32);
+   function  Get_Software_Interrupt (Target : U32) return Boolean;
 
-   ------------------------------------------------------------------------------
-   --  Memory Barrier
-   ------------------------------------------------------------------------------
-   procedure Memory_Barrier with Inline;
+   --  Timer (MTIME/MTIMECMP)
+   procedure Set_Timer_Interrupt (Value : U64);
+   procedure Clear_Timer_Interrupt;
+   function  Read_Timer return U64;
 
+   --  Optional resync after power gating
+   procedure Resync (Reference : Address);
+
+private
+   --  MMIO bases
+   MSIP_Base     : Address := System.Null_Address;
+   MTIME_Base    : Address := System.Null_Address;
+   MTIMECMP_Base : Address := System.Null_Address;
+
+   CLINT_Enabled   : Boolean := False;
+   Timer_Interval  : U64 := 0;
 end Arch.CLINT;
-   

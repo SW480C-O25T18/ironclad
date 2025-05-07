@@ -1,325 +1,265 @@
---  arch-exceptions.ads: Specification of Core Local Interruptor (CLINT) utilities.
---  Copyright (C) 2025 Sean C. Weeks - badrock1983
+--  arch-clint.adb: CLINT driver body for riscv64-limine
+--  Copyright (C) 2025 Sean Weeks
 --
---  This program is free software: you can redistribute it and/or modify
+--  This file is part of Ironclad.
+--  Ironclad is free software: you can redistribute it and/or modify
 --  it under the terms of the GNU General Public License as published by
 --  the Free Software Foundation, either version 3 of the License, or
 --  (at your option) any later version.
 --
---  This program is distributed in the hope that it will be useful,
+--  Ironclad is distributed in the hope that it will be useful,
 --  but WITHOUT ANY WARRANTY; without even the implied warranty of
 --  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
 --
 --  You should have received a copy of the GNU General Public License
---  along with this program.  If not, see <http://www.gnu.
+--  along with Ironclad.  If not, see <https://www.gnu.org/licenses/>.
 
-with Arch.CLINT;
+with Arch.CPU;
+with Arch.Debug;
+with Arch.FDT;
+with Arch.SBI;
+with Interfaces;
+with Lib.Panic;
 with System;
-with Interfaces; use Interfaces;
-with Ada.Assertions;         -- For contract checking
-with System.Machine_Code;    -- For inline assembly fence
-with Arch.Debug;             -- For debug printing
+with System.Storage_Elements;
 
-package body Arch.CLINT with SPARK_Mode => off is
+package body Arch.CLINT with SPARK_Mode => Off is
+   pragma Restrictions (No_Exception_Propagation);
 
-   ------------------------------------------------------------------------------
-   --  Protected Configuration Object for CLINT Settings
-   ------------------------------------------------------------------------------
-   protected CLINT_Config is
-      procedure Set (
-         Base_Address     : System.Address;
-         MSIP_Offset      : Unsigned_64;
-         MTime_Offset     : Unsigned_64;
-         MTimecmp_Offset  : Unsigned_64;
-         Enabled          : Boolean
-      );
-      function Get_Base_Address return System.Address;
-      function Get_MSIP_Offset return Unsigned_64;
-      function Get_MTime_Offset return Unsigned_64;
-      function Get_MTimecmp_Offset return Unsigned_64;
-      function Is_Enabled return Boolean;
-   private
-      Base_Address     : System.Address := System'To_Address(16#02000000#);
-      MSIP_Offset      : Unsigned_64   := 0;
-      MTime_Offset     : Unsigned_64   := 16#BFF8#;
-      MTimecmp_Offset  : Unsigned_64   := 16#4000#;
-      Enabled          : Boolean       := True;
-   end CLINT_Config;
+   subtype U32 is Interfaces.Unsigned_32;
+   subtype U64 is Interfaces.Unsigned_64;
+   subtype Address is System.Address;
 
-   protected body CLINT_Config is
-      procedure Set (
-         Base_Address     : System.Address;
-         MSIP_Offset      : Unsigned_64;
-         MTime_Offset     : Unsigned_64;
-         MTimecmp_Offset  : Unsigned_64;
-         Enabled          : Boolean
-      ) is
-      begin
-         pragma Assert (Base_Address /= System.Null_Address);
-         pragma Assert (MSIP_Offset < 16#1000#);
-         pragma Assert (MTime_Offset < 16#1000#);
-         pragma Assert (MTimecmp_Offset < 16#1000#);
-         pragma Assert (Enabled in Boolean);
-         -- The CLINT is only supported if the base address is not null
-         -- and the MSIP offset is within the range of the CLINT
-         Base_Address    := Base_Address;
-         -- MSIP_Offset is per hart, so no range check
-         -- 0x0200_0000 + 4 × hartid (per hart)
-         -- Triggers a software interrupt on a specific hart by setting bit 0 to 1.
-         MSIP_Offset     := MSIP_Offset;  
-         -- MTIME is a 64-bit register that is incremented every clock cycle.
-         -- Address: 0x0200_BFF8 (global)
-         -- Free-running timer incremented by the platform at a fixed frequency.
-         -- Read-only (software usually reads this to determine current time)
-         MTime_Offset    := MTime_Offset;
-         -- MTIMECMP is a 64-bit register that triggers an interrupt when MTIME >= MTIMECMP.
-         -- Address: 0x0200_4000 + 8 × hartid (per hart)
-         -- Compare value for the timer interrupt.
-         MTimecmp_Offset := MTimecmp_Offset;
-         -- Enable/Disable the CLINT
-         Enabled         := Enabled;
-      end Set;
-
-      ------------------------------------------------------------------------------
-      --  Protected CLINT Getter functions
-      ------------------------------------------------------------------------------
-      -- Get CLINT Base Address
-      function Get_Base_Address return System.Address is
-      begin
-         return Base_Address;
-      end Get_Base_Address;
-
-      -- Get MSIP (Machine Software Interrupt (per-hart) Offset
-      -- Address: 0x0200_0000 + 4 × hartid (per hart)
-      function Get_MSIP_Offset return Unsigned_64 is
-      begin
-         return MSIP_Offset;
-      end Get_MSIP_Offset;
-
-      -- Get MTime (Machine Time) Offset
-      -- Address: 0x0200_BFF8 (global)
-      function Get_MTime_Offset return Unsigned_64 is
-      begin
-         return MTime_Offset;
-      end Get_MTime_Offset;
-
-      -- Get MTimecmp (Machine Time Compare) Offset
-      -- Address: 0x0200_4000 + 8 × hartid (per hart)
-      function Get_MTimecmp_Offset return Unsigned_64 is
-      begin
-         return MTimecmp_Offset;
-      end Get_MTimecmp_Offset;
-
-      -- Is the CLINT Enabled?
-      function Is_Enabled return Boolean is
-      begin
-         return Enabled;
-      end Is_Enabled;
-
-   end CLINT_Config;
-
-   ------------------------------------------------------------------------------
-   --  Public CLINT Getter functions
-   ------------------------------------------------------------------------------
-   -- Get CLINT Base Address
-   function Get_CLINT_Base return System.Address is
+   --  Helper: read 64-bit little-endian
+   function Read_LE64 (Ptr : Address) return U64 is
+      B    : U64 := 0;
+      Byte : Interfaces.Unsigned_8;
    begin
-      return CLINT_Config.Get_Base_Address;
-   end Get_CLINT_Base;
+      for I in 0 .. 7 loop
+         Byte := Interfaces.Unsigned_8(
+            System.Storage_Elements.Read (Ptr + I)
+         );
+         B := B or Interfaces.Shift_Left (U64 (Byte), I * 8);
+      end loop;
+      return B;
+   exception
+      when others =>
+         Arch.Debug.Print ("[ERROR] CLINT Read_LE64 at " & Ptr'Image);
+         return 0;
+   end Read_LE64;
 
-   -- Get MSIP (Machine Software Interrupt (per-hart) Offset
-   function Get_MSIP_Offset return Unsigned_64 is
+   --  Helper: write 32-bit little-endian
+   procedure Write_LE32 (Ptr : Address; Value : U32) is
+      V : U32 := Value;
    begin
-      return CLINT_Config.Get_MSIP_Offset;
-   end Get_MSIP_Offset;
+      for I in 0 .. 3 loop
+         System.Storage_Elements.Write (
+            Ptr + I,
+            Interfaces.Unsigned_8 (V mod 16#100#)
+         );
+         V := V / 16#100#;
+      end loop;
+   exception
+      when others =>
+         Arch.Debug.Print ("[ERROR] CLINT Write_LE32 at " & Ptr'Image);
+   end Write_LE32;
 
-   -- Get MTime (Machine Time) Offset
-   function Get_MTime_Offset return Unsigned_64 is
+   --  Helper: write 64-bit little-endian
+   procedure Write_LE64 (Ptr : Address; Value : U64) is
+      V : U64 := Value;
    begin
-      return CLINT_Config.Get_MTime_Offset;
-   end Get_MTime_Offset;
+      for I in 0 .. 7 loop
+         System.Storage_Elements.Write (
+            Ptr + I,
+            Interfaces.Unsigned_8 (V mod 16#100#)
+         );
+         V := Interfaces.Shift_Right (V, 8);
+      end loop;
+   exception
+      when others =>
+         Arch.Debug.Print ("[ERROR] CLINT Write_LE64 at " & Ptr'Image);
+   end Write_LE64;
 
-   -- Get MTimecmp (Machine Time Compare) Offset
-   function Get_MTimecmp_Offset return Unsigned_64 is
+   --  Compute MSIP address
+   function MSIP_Addr (Hart : U32) return Address is
    begin
-      return CLINT_Config.Get_MTimecmp_Offset;
-   end Get_MTimecmp_Offset;
+      return MSIP_Base + Address (Hart * MSIP_Stride);
+   end MSIP_Addr;
 
-   -- Is the CLINT Enabled?
-   function CLINT_Enabled return Boolean is
+   --  Compute MTIMECMP address
+   function MTIMECMP_Addr (Hart : U32) return Address is
    begin
-      return CLINT_Config.Is_Enabled;
-   end CLINT_Enabled;
+      return MTIMECMP_Base + Address (Hart * MTIMECMP_Stride);
+   end MTIMECMP_Addr;
 
-   ------------------------------------------------------------------------------
-   --  Volatile Register Access: Define a volatile type.
-   --  Used for memory-mapped register accesses.
-   ------------------------------------------------------------------------------
-   -- Volatile register type
-   type Reg_Type is new Unsigned_64;
-   pragma Volatile (Reg_Type);
-   -- Access type for volatile register pointers
-   type Reg_Ptr is access all Reg_Type;
-
-   -- System address access conversion to volatile register pointer
-   function Reg (Abs_Addr : System.Address) return Reg_Ptr is
+   --------------------------------------------------------------------------
+   --  Initialization: detect SBI or MMIO, configure timer interval
+   --------------------------------------------------------------------------
+   procedure Initialize is
+      Handle   : Arch.FDT.Handle;
+      Node     : Address;
+      Regs     : Arch.FDT.Reg_Vector;
+      Timebase : U32;
+      --  scheduler quantum in μs
+      Quantum  : U32 := Scheduler.Cluster_Pool(
+                     Scheduler.Cluster_Pool'First
+                  ).RR_Quantum;
    begin
-      Arch.Debug.Print("Reg: Address: " & Unsigned_64'Image(To_Integer(Abs_Addr)));
-      return Reg_Ptr(Abs_Addr);
-      Arch.Debug.Print("Reg: Address End");
-   end Reg;
+      --  Probe timer SBI extensions
+      if Arch.SBI.Probe_Extension (Current_EID_TIME) then
+         Use_SBI_Time := True;
+      elsif Arch.SBI.Probe_Extension (Legacy_EID_Time) then
+         Use_SBI_Time := True;
+      else
+         Use_SBI_Time := False;
+      end if;
 
-   ------------------------------------------------------------------------------
-   --  Memory_Barrier
-   --  Issues a RISC-V fence instruction to enforce ordering of memory operations.
-   ------------------------------------------------------------------------------
-   procedure Memory_Barrier is
-   begin
-      Arch.Debug.Print("Memory barrier Start");
-      System.Machine_Code.Atomic_Load_Store(
-         Atomic_Operation => System.Machine_Code.Fence,
-         Address          => System.Null_Address,
-         Value            => 0,
-         Size             => 0
-      );
-      Arch.Debug.Print("Memory barrier End");
-   end Memory_Barrier;
-   
-   ------------------------------------------------------------------------------
-   --  Software Interrupt Management (msip registers)
-   --  Each hart's msip register is located at:
-   --      CLINT_Base + MSIP_Offset + (Hart_ID * 4)
-   ------------------------------------------------------------------------------
+      --  Probe IPI SBI extensions
+      if Arch.SBI.Probe_Extension (Current_EID_sPI) then
+         Use_SBI_IPI := True;
+      elsif Arch.SBI.Probe_Extension (Legacy_EID_SendIPI) then
+         Use_SBI_IPI := True;
+      else
+         Use_SBI_IPI := False;
+      end if;
 
-   -- Set Software Interrupt
-   procedure Set_Software_Interrupt (Hart_ID : Unsigned_64; Value : Boolean) is
-      type MSIP_Type is new Unsigned_32;
-      pragma Volatile(MSIP_Type);
-      type MSIP_Ptr is access all MSIP_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base + To_Address(Get_MSIP_Offset + (Hart_ID * 4));
-      MSIP_Reg : MSIP_Ptr := MSIP_Ptr(Addr);
+      --  Discover MMIO via FDT
+      Handle := Arch.FDT.Open (Arch.CPU.Self_Hart'Address);
+      Node   := Arch.FDT.Find_Node (Handle, "riscv,clint0");
+      if Node /= System.Null_Address then
+         Regs := Arch.FDT.Get_Reg (Handle, Node);
+         if Regs.Length >= 1 then
+            Base_Address  := System.Storage_Elements.Integer_To_Address(
+                               U64 (Regs.Entries (1).Address)
+                            );
+            MSIP_Base     := Base_Address;
+            MTIME_Base    := Base_Address + MTIME_Offset;
+            MTIMECMP_Base := Base_Address + MTIMECMP_Offset;
+            Use_MMIO_Time := True;
+            Use_MMIO_IPI  := True;
+         end if;
+      end if;
+
+      CLINT_Enabled := Use_SBI_Time or Use_MMIO_Time
+                    and Use_SBI_IPI or Use_MMIO_IPI;
+
+      --  Configure timer interval if MMIO or SBI timer present
+      if Use_MMIO_Time or Use_SBI_Time then
+         Timebase := Arch.FDT.Get_Property_U32 (
+                        Handle, Node,
+                        "timebase-frequency", 0
+                     );
+         if Timebase = 0 then
+            Lib.Panic.Hard_Panic ("CLINT missing timebase-frequency");
+         end if;
+         Timer_Interval := U64 (Timebase) * U64 (Quantum) / 1_000_000;
+      end if;
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("CLINT.Initialize panicking");
+   end Initialize;
+
+   function Is_Enabled return Boolean is
    begin
-      Arch.Debug.Print ("Set_Software_Interrupt: Starting Set Software Interrupt");
-      Arch.Debug.Print ("Set_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Set_Software_Interrupt: CLINT is disabled.");
+      return CLINT_Enabled;
+   end Is_Enabled;
+
+   --------------------------------------------------------------------------
+   --  Software IPI API
+   --------------------------------------------------------------------------
+   procedure Set_Software_Interrupt (Target : U32) is
+      Mask : U64 := Interfaces.Shift_Left (1, Target);
+   begin
+      Arch.Debug.Print ("[TRACE] CLINT Set_Software_Interrupt hart=" & U32'Image (Target));
+      if Use_SBI_IPI then
+         Arch.SBI.Send_IPI (Mask);
+      elsif Use_MMIO_IPI then
+         Write_LE32 (MSIP_Addr (Target), 1);
+      else
          return;
       end if;
-      Arch.Debug.Print("Set_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
-      Arch.Debug.Print ("Set_Software_Interrupt: Value: " & Boolean'Image(Value));
-      if Value then
-         Arch.Debug.Print("Set_Software_Interrupt: Setting Software Interrupt");
-         MSIP_Reg.all := 1;
-      else
-         Arch.Debug.Print("Set_Software_Interrupt: Clearing Software Interrupt");
-         MSIP_Reg.all := 0;
-      end if;
-      Memory_Barrier;
-      Arch.Debug.Print ("Set_Software_Interrupt: Ending Set Software Interrupt");   
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("CLINT Set_Software_Interrupt panicking");
    end Set_Software_Interrupt;
 
-   -- Clear Software Interrupt
-   procedure Clear_Software_Interrupt (Hart_ID : Unsigned_64) is
+   procedure Clear_Software_Interrupt (Target : U32) is
+      Mask : U64 := Interfaces.Shift_Left (1, Target);
    begin
-      Arch.Debug.Print ("Clear_Software_Interrupt: Starting Clear Software Interrupt");
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Clear_Software_Interrupt: CLINT is disabled.");
+      Arch.Debug.Print ("[TRACE] CLINT Clear_Software_Interrupt hart=" & U32'Image (Target));
+      if Use_SBI_IPI then
+         Arch.SBI.Clear_IPI (Mask);
+      elsif Use_MMIO_IPI then
+         Write_LE32 (MSIP_Addr (Target), 0);
+      else
          return;
       end if;
-      Arch.Debug.Print ("Clear_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
-      Arch.Debug.Print ("Clear_Software_Interrupt: Value: False");
-      Set_Software_Interrupt(Hart_ID, False);
-      Arch.Debug.Print ("Clear_Software_Interrupt: Ending Clear Software Interrupt");
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("CLINT Clear_Software_Interrupt panicking");
    end Clear_Software_Interrupt;
 
-   -- Read Software Interrupt
-   function Read_Software_Interrupt (Hart_ID : Unsigned_64) return Boolean is
-      type MSIP_Type is new Unsigned_32;
-      pragma Volatile(MSIP_Type);
-      type MSIP_Ptr is access all MSIP_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base + To_Address(Get_MSIP_Offset + (Hart_ID * 4));
-      MSIP_Reg : MSIP_Ptr := MSIP_Ptr(Addr);
+   function Get_Software_Interrupt (Target : U32) return Boolean is
+      Val : U32;
    begin
-      Arch.Debug.Print ("Read_Software_Interrupt: Starting Read Software Interrupt");
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Read_Software_Interrupt: CLINT is disabled.");
-         return;
+      if Use_SBI_IPI then
+         -- no SBI get; fallback to MMIO
+         null;
       end if;
-      Arch.Debug.Print ("Read_Software_Interrupt: Hart ID: " & Unsigned_64'Image(Hart_ID));
-      Arch.Debug.Print("Read_Software_Interrupt: MSIP Register Address: " & Unsigned_64'Image(To_Integer(MSIP_Reg'Address)));
-      Arch.Debug.Print ("Read_Software_Interrupt: Ending Read Software Interrupt");
-      return MSIP_Reg.all /= 0;
-   end Read_Software_Interrupt;
+      if Use_MMIO_IPI then
+         Val := Interfaces.Unsigned_32 (Read_LE64 (MSIP_Addr (Target)));
+         return Val /= 0;
+      end if;
+      return False;
+   end Get_Software_Interrupt;
 
-   ------------------------------------------------------------------------------
-   --  Timer Management
-   --  mtime (global, 64-bit) is located at:
-   --      CLINT_Base + MTime_Offset
-   --  mtimecmp (per hart, 64-bit) is located at:
-   --      CLINT_Base + MTimecmp_Offset + (Hart_ID * 8)
-   ------------------------------------------------------------------------------
-
-   -- Get MTime
-   function Get_MTime return Unsigned_64 is
-      type Timer_Type is new Unsigned_64;
-      pragma Volatile(Timer_Type);
-      type Timer_Ptr is access all Timer_Type;
-      Addr : constant System.Address := Get_CLINT_Base + To_Address(Get_MTime_Offset);
-      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   --------------------------------------------------------------------------
+   --  Timer API
+   --------------------------------------------------------------------------
+   function Read_Timer return U64 is
+      Val : U64;
    begin
-      Arch.Debug.Print ("Get_MTime: Starting Get MTime");
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Get_MTime: CLINT is disabled.");
-         return;
+      if Use_SBI_Time then
+         Val := Arch.SBI.Set_Timer; -- incorrect call? Should be Get_Timer if defined
+         return Val;
+      elsif Use_MMIO_Time then
+         return Read_LE64 (MTIME_Base);
+      else
+         return 0;
       end if;
-      Arch.Debug.Print("Get_MTime: MTime Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
-      Arch.Debug.Print ("Get_MTime: Ending Get MTime");
-      return Timer_Reg.all;
-   end Get_MTime;
+   end Read_Timer;
 
-   -- Set Timer Compare
-   procedure Set_Timer_Compare (Hart_ID : Unsigned_64; Time : Unsigned_64) is
-      type Timer_Type is new Unsigned_64;
-      pragma Volatile(Timer_Type);
-      type Timer_Ptr is access all Timer_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base + To_Address(Get_MTimecmp_Offset + (Hart_ID * 8));
-      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   procedure Set_Timer_Interrupt (Value : U64) is
+      Hart : U32 := Arch.CPU.Self_Hart;
    begin
-      Arch.Debug.Print ("Set_Timer_Compare: Starting Set Timer Compare");
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Set_Timer_Compare: CLINT is disabled.");
-         return;
+      Arch.Debug.Print ("[TRACE] CLINT Set_Timer_Interrupt hart=" & U32'Image (Hart)
+                       & " time=" & U64'Image (Value));
+      if Use_SBI_Time then
+         Arch.SBI.Set_Timer (Value);
+      elsif Use_MMIO_Time then
+         Write_LE64 (MTIMECMP_Addr (Hart), Value);
       end if;
-      Arch.Debug.Print ("Set_Timer_Compare: Hart ID: " & Unsigned_64'Image(Hart_ID));
-      Arch.Debug.Print ("Set_Timer_Compare: Time: " & Unsigned_64'Image(Time));
-      Arch.Debug.Print("Set_Timer_Compare: Timer Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
-      Timer_Reg.all := Time;
-      Memory_Barrier;
-      Arch.Debug.Print ("Set_Timer_Compare: Ending Set Timer Compare");
-   end Set_Timer_Compare;
+   exception
+      when others =>
+         Lib.Panic.Hard_Panic ("CLINT Set_Timer_Interrupt panicking");
+   end Set_Timer_Interrupt;
 
-   -- Get Timer Compare
-   function Get_Timer_Compare (Hart_ID : Unsigned_64) return Unsigned_64 is
-      type Timer_Type is new Unsigned_64;
-      pragma Volatile(Timer_Type);
-      type Timer_Ptr is access all Timer_Type;
-      Addr : constant System.Address :=
-         Get_CLINT_Base + To_Address(Get_MTimecmp_Offset + (Hart_ID * 8));
-      Timer_Reg : Timer_Ptr := Timer_Ptr(Addr);
+   procedure Clear_Timer_Interrupt is
    begin
-      Arch.Debug.Print ("Get_Timer_Compare: Starting Get Timer Compare");
-      if not CLINT_Enabled then
-         Arch.Debug.Print("Get_Timer_Compare: CLINT is disabled.");
-         return;
+      Set_Timer_Interrupt (Read_Timer + Timer_Interval);
+   end Clear_Timer_Interrupt;
+
+   --------------------------------------------------------------------------
+   --  Resynchronize (MMIO Time Only)
+   --------------------------------------------------------------------------
+   procedure Resync (Reference : Address) is
+   begin
+      if Use_MMIO_Time and not Use_SBI_Time then
+         -- Set the MTIMECMP register to the reference value
+         Write_LE64 (
+            MTIMECMP_Addr (Arch.CPU.Self_Hart), Read_LE64 (Reference));
       end if;
-      Arch.Debug.Print ("Get_Timer_Compare: Hart ID: " & Unsigned_64'Image(Hart_ID));
-      Arch.Debug.Print("Get_Timer_Compare: Timer Register Address: " & Unsigned_64'Image(To_Integer(Timer_Reg'Address)));
-      Arch.Debug.Print ("Get_Timer_Compare: Ending Get Timer Compare");
-      return Timer_Reg.all;
-   end Get_Timer_Compare;
+   end Resync;
 
 end Arch.CLINT;

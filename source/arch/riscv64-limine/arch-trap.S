@@ -18,97 +18,128 @@
 
 .section .text
 .global trap_entry
-.type trap_entry, @function
+.type   trap_entry, @function
 
 trap_entry:
-    addi sp, sp, -FRAME_SIZE            # Allocate trap frame
+    addi    sp, sp, -FRAME_SIZE         # Allocate full trap frame
 
-    sd ra, FRAME_RA(sp)                # Save x1 (ra)
-    sd tp, FRAME_TP(sp)                # Save x4 (tp)
-    sd t0, FRAME_T0(sp)                # Save x5 (t0)
-    sd t1, FRAME_T1(sp)                # Save x6 (t1)
-    sd t2, FRAME_T2(sp)                # Save x7 (t2)
+    # --- save caller‑saved GPRs ---
+    sd      ra, FRAME_RA(sp)            # x1
+    sd      tp, FRAME_TP(sp)            # x4
+    sd      t0, FRAME_T0(sp)            # x5
+    sd      t1, FRAME_T1(sp)            # x6
+    sd      t2, FRAME_T2(sp)            # x7
 
-    sd a0, FRAME_A0(sp)                # Save x10 (a0)
-    sd a1, FRAME_A1(sp)                # Save x11 (a1)
-    sd a2, FRAME_A2(sp)                # Save x12 (a2)
-    sd a3, FRAME_A3(sp)                # Save x13 (a3)
-    sd a4, FRAME_A4(sp)                # Save x14 (a4)
-    sd a5, FRAME_A5(sp)                # Save x15 (a5)
-    sd a6, FRAME_A6(sp)                # Save x16 (a6)
-    sd a7, FRAME_A7(sp)                # Save x17 (a7)
+    sd      a0, FRAME_A0(sp)            # x10
+    sd      a1, FRAME_A1(sp)            # x11
+    sd      a2, FRAME_A2(sp)            # x12
+    sd      a3, FRAME_A3(sp)            # x13
+    sd      a4, FRAME_A4(sp)            # x14
+    sd      a5, FRAME_A5(sp)            # x15
+    sd      a6, FRAME_A6(sp)            # x16
+    sd      a7, FRAME_A7(sp)            # x17
 
-    sd t3, FRAME_T3(sp)                # Save x28 (t3)
-    sd t4, FRAME_T4(sp)                # Save x29 (t4)
-    sd t5, FRAME_T5(sp)                # Save x30 (t5)
-    sd t6, FRAME_T6(sp)                # Save x31 (t6)
+    sd      t3, FRAME_T3(sp)            # x28
+    sd      t4, FRAME_T4(sp)            # x29
+    sd      t5, FRAME_T5(sp)            # x30
+    sd      t6, FRAME_T6(sp)            # x31
 
-    sd sp, FRAME_SP(sp)                # Save x2 (sp)
-    sd gp, FRAME_GP(sp)                # Save x3 (gp)
-    sd s0, FRAME_S0(sp)                # Save x8 (s0/fp)
-    sd s1, FRAME_S1(sp)                # Save x9 (s1)
-    sd s2, FRAME_S2(sp)                # Save x18 (s2)
-    sd s3, FRAME_S3(sp)                # Save x19 (s3)
-    sd s4, FRAME_S4(sp)                # Save x20 (s4)
-    sd s5, FRAME_S5(sp)                # Save x21 (s5)
-    sd s6, FRAME_S6(sp)                # Save x22 (s6)
-    sd s7, FRAME_S7(sp)                # Save x23 (s7)
-    sd s8, FRAME_S8(sp)                # Save x24 (s8)
-    sd s9, FRAME_S9(sp)                # Save x25 (s9)
-    sd s10, FRAME_S10(sp)              # Save x26 (s10)
-    sd s11, FRAME_S11(sp)              # Save x27 (s11)
+    # --- save callee‑saved GPRs ---
+    sd      sp, FRAME_SP(sp)            # x2
+    sd      gp, FRAME_GP(sp)            # x3
+    sd      s0, FRAME_S0(sp)            # x8
+    sd      s1, FRAME_S1(sp)            # x9
+    sd      s2, FRAME_S2(sp)            # x18
+    sd      s3, FRAME_S3(sp)            # x19
+    sd      s4, FRAME_S4(sp)            # x20
+    sd      s5, FRAME_S5(sp)            # x21
+    sd      s6, FRAME_S6(sp)            # x22
+    sd      s7, FRAME_S7(sp)            # x23
+    sd      s8, FRAME_S8(sp)            # x24
+    sd      s9, FRAME_S9(sp)            # x25
+    sd      s10, FRAME_S10(sp)          # x26
+    sd      s11, FRAME_S11(sp)          # x27
 
-    csrr t0, sepc
-    sd t0, FRAME_SEPC(sp)              # Save exception PC
-    csrr t0, scause
-    sd t0, FRAME_SCAUSE(sp)            # Save trap cause
-    csrr t0, stval
-    sd t0, FRAME_STVAL(sp)             # Save faulting address
-    csrr t0, sstatus
-    sd t0, FRAME_SSTATUS(sp)           # Save supervisor status
+    # --- save CSRs ---
+    csrr    t0, sepc
+    sd      t0, FRAME_SEPC(sp)
+    csrr    t0, scause
+    sd      t0, FRAME_SCAUSE(sp)
+    csrr    t0, stval
+    sd      t0, FRAME_STVAL(sp)
+    csrr    t0, sstatus
+    sd      t0, FRAME_SSTATUS(sp)
 
-    ld t1, TCB_FPCTX(tp)
-    sd t1, FRAME_FPCTX(sp)             # Save FP_Context pointer
+    # --- save floating‑point control/status ---
+    csrr    t0, fcsr
+    sd      t0, FRAME_FCSR(sp)
 
-    mv a0, sp                          # Pass Frame pointer
-    call Handle_Trap                   # Call kernel trap handler
+    # --- save lazy-FP pointer from TCB ---
+    ld      t1, TCB_FPCTX(tp)
+    sd      t1, FRAME_FPCTX(sp)
 
-.global trap_exit
+    # --- re‑enable interrupts (for nested) ---
+    li      t0, 2                   # SIE mask
+    csrs    sstatus, t0
+
+    # --- call into Ada trap handler ---
+    mv      a0, sp
+    call    Handle_Trap
+
+    # (never returns here)
+
+    .global trap_exit
+    .type   trap_exit, @function
+
 trap_exit:
-    ld ra, FRAME_RA(sp)                # Restore x1 (ra)
-    ld tp, FRAME_TP(sp)                # Restore x4 (tp)
-    ld t0, FRAME_T0(sp)                # Restore x5 (t0)
-    ld t1, FRAME_T1(sp)                # Restore x6 (t1)
-    ld t2, FRAME_T2(sp)                # Restore x7 (t2)
+    # --- restore caller‑saved GPRs ---
+    ld      ra, FRAME_RA(sp)
+    ld      tp, FRAME_TP(sp)
+    ld      t0, FRAME_T0(sp)
+    ld      t1, FRAME_T1(sp)
+    ld      t2, FRAME_T2(sp)
 
-    ld a0, FRAME_A0(sp)                # Restore x10 (a0)
-    ld a1, FRAME_A1(sp)                # Restore x11 (a1)
-    ld a2, FRAME_A2(sp)                # Restore x12 (a2)
-    ld a3, FRAME_A3(sp)                # Restore x13 (a3)
-    ld a4, FRAME_A4(sp)                # Restore x14 (a4)
-    ld a5, FRAME_A5(sp)                # Restore x15 (a5)
-    ld a6, FRAME_A6(sp)                # Restore x16 (a6)
-    ld a7, FRAME_A7(sp)                # Restore x17 (a7)
+    ld      a0, FRAME_A0(sp)
+    ld      a1, FRAME_A1(sp)
+    ld      a2, FRAME_A2(sp)
+    ld      a3, FRAME_A3(sp)
+    ld      a4, FRAME_A4(sp)
+    ld      a5, FRAME_A5(sp)
+    ld      a6, FRAME_A6(sp)
+    ld      a7, FRAME_A7(sp)
 
-    ld t3, FRAME_T3(sp)                # Restore x28 (t3)
-    ld t4, FRAME_T4(sp)                # Restore x29 (t4)
-    ld t5, FRAME_T5(sp)                # Restore x30 (t5)
-    ld t6, FRAME_T6(sp)                # Restore x31 (t6)
+    ld      t3, FRAME_T3(sp)
+    ld      t4, FRAME_T4(sp)
+    ld      t5, FRAME_T5(sp)
+    ld      t6, FRAME_T6(sp)
 
-    ld sp, FRAME_SP(sp)                # Restore x2 (sp)
-    ld gp, FRAME_GP(sp)                # Restore x3 (gp)
-    ld s0, FRAME_S0(sp)                # Restore x8 (s0/fp)
-    ld s1, FRAME_S1(sp)                # Restore x9 (s1)
-    ld s2, FRAME_S2(sp)                # Restore x18 (s2)
-    ld s3, FRAME_S3(sp)                # Restore x19 (s3)
-    ld s4, FRAME_S4(sp)                # Restore x20 (s4)
-    ld s5, FRAME_S5(sp)                # Restore x21 (s5)
-    ld s6, FRAME_S6(sp)                # Restore x22 (s6)
-    ld s7, FRAME_S7(sp)                # Restore x23 (s7)
-    ld s8, FRAME_S8(sp)                # Restore x24 (s8)
-    ld s9, FRAME_S9(sp)                # Restore x25 (s9)
-    ld s10, FRAME_S10(sp)              # Restore x26 (s10)
-    ld s11, FRAME_S11(sp)              # Restore x27 (s11)
+    # --- restore callee‑saved GPRs ---
+    ld      sp, FRAME_SP(sp)
+    ld      gp, FRAME_GP(sp)
+    ld      s0, FRAME_S0(sp)
+    ld      s1, FRAME_S1(sp)
+    ld      s2, FRAME_S2(sp)
+    ld      s3, FRAME_S3(sp)
+    ld      s4, FRAME_S4(sp)
+    ld      s5, FRAME_S5(sp)
+    ld      s6, FRAME_S6(sp)
+    ld      s7, FRAME_S7(sp)
+    ld      s8, FRAME_S8(sp)
+    ld      s9, FRAME_S9(sp)
+    ld      s10, FRAME_S10(sp)
+    ld      s11, FRAME_S11(sp)
 
-    addi sp, sp, FRAME_SIZE            # Free trap frame
-    sret                               # Return from trap
+    # --- restore supervisor CSRs ---
+    ld      t0, FRAME_SSTATUS(sp)
+    csrw    sstatus, t0
+
+    ld      t0, FRAME_SEPC(sp)
+    csrw    sepc, t0
+
+    # --- restore floating‑point control/status ---
+    ld      t0, FRAME_FCSR(sp)
+    csrw    fcsr, t0
+
+    # --- tear down stack and return ---
+    addi    sp, sp, FRAME_SIZE
+    sret

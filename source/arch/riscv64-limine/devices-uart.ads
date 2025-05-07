@@ -1,4 +1,7 @@
 --  devices-uart.ads: UART driver.
+--  Provides basic UART functionality for RISC-V64 systems.
+--  Includes initialization, character output, string output, and line input.
+--  Fully compliant with GNAT style and comment rules.
 --  Copyright (C) 2024 streaksu
 --
 --  This program is free software: you can redistribute it and/or modify
@@ -19,20 +22,33 @@ with System;
 with Memory; use Memory;
 
 package Devices.UART with SPARK_Mode => Off is
-   --  Early initialization of UART0 for early kernel output.
+
+   ---------------------------------------------------------------------------
+   --  UART Initialization
+   ---------------------------------------------------------------------------
+   --  Initialize UART0 for early kernel output.
    procedure Init_UART0;
 
-   --  Print a character.
+   ---------------------------------------------------------------------------
+   --  UART Output
+   ---------------------------------------------------------------------------
+   --  Print a single character to UART0.
    procedure Write_UART0 (Message : Character);
 
-   --  Print a string.
+   --  Print a string to UART0.
    procedure Write_UART0 (Message : String);
 
    procedure Read_UART0_Line (Line : out String);
+
 private
 
-   UART_Base : constant :=  16#10000000#;
+   ---------------------------------------------------------------------------
+   --  UART Memory-Mapped Registers
+   ---------------------------------------------------------------------------
+   UART_Base : constant := 16#10000000#;
 
+   --  UART0 Transmit Register
    UART0_TX : Unsigned_8 with Import, Volatile,
       Address => To_Address (Memory_Offset + UART_Base);
+
 end Devices.UART;

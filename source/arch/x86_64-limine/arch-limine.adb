@@ -16,14 +16,20 @@
 
 with System; use System;
 with Lib;
-with Lib.Messages;
+with Arch.Debug;  use Arch.Debug;
 
-package body Arch.Limine with SPARK_Mode => Off is
-   Base_Request : Limine.Base_Revision :=
+package body Arch.Limine with SPARK_Mode => Off is   use Arch.Debug;
+
+quest : Limine.Base_Revision :=
       (ID_1     => 16#f9562b2d5c95a6c8#,
        ID_2     => 16#6a7b384944536bdc#,
        Revision => 3)
       with Export, Async_Writers;
+
+   DTB_Response : constant DTB_Response :=
+      (Base     => DTB_Request,
+       DTB_Addr => System.Null_Address)
+      with Import, Address => DTB_Request.Response;
 
    function Get_Physical_Address return System.Address is
       PhysPonse : Kernel_Address_Response
@@ -47,7 +53,7 @@ package body Arch.Limine with SPARK_Mode => Off is
          with Import, Address => MemPonse.Entries;
       Type_Entry : Boot_Memory_Type;
    begin
-      Lib.Messages.Put_Line ("Booted by " & Boot_Name & " " & Boot_Vers);
+      Debug.Print  ("Booted by " & Boot_Name & " " & Boot_Vers);
 
       if Base_Request.Revision /= 0 then
       -- if true then
@@ -103,7 +109,7 @@ package body Arch.Limine with SPARK_Mode => Off is
             when LIMINE_MEMMAP_KERNEL_AND_MODS =>
                Type_Entry := Memory_Kernel;
             when others =>
-               Lib.Messages.Put_Line ("Unrecognized memory assumed reserved");
+               Debug.Print  ("Unrecognized memory assumed reserved");
                Type_Entry := Memory_Reserved;
          end case;
 
@@ -116,6 +122,20 @@ package body Arch.Limine with SPARK_Mode => Off is
 
    exception
       when Constraint_Error =>
-         Lib.Messages.Put_Line ("Exception encountered translating limine");
+         Debug.Print  ("Exception encountered translating limine");
    end Translate_Proto;
+
+   procedure Initialize_DTB is
+      DTB_Response : constant DTB_Response
+         with Import, Address => DTB_Request.Response;
+   begin
+      if DTB_Response.Base.Revision /= 0 or
+      else DTB_Response.DTB_Addr = System.Null_Address then
+         Debug.Print ("DTB_Response: Invalid response" &
+            "(unsupported revision or null address).");
+         return;
+      end if;
+
+      Debug.Print ("DTB_Response: DTB address = " & Address'Image(DTB_Response.DTB_Addr));
+   end Initialize_DTB;
 end Arch.Limine;

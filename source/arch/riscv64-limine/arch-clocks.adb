@@ -14,6 +14,8 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+pragma Warnings (Off);
+
 package body Arch.Clocks with
    Refined_State =>
       (RT_Clock_State =>
@@ -32,11 +34,19 @@ is
    RT_Stored_Seconds        : Unsigned_64;
    RT_Stored_Nanoseconds    : Unsigned_64;
 
+   --  pragma Unused (RT_Timestamp_Seconds);
+   --  pragma Unused (RT_Timestamp_Nanoseconds);
+   --  pragma Unused (RT_Stored_Seconds);
+   --  pragma Unused (RT_Stored_Nanoseconds);
+
    --  Monotonic TSC cycles per millisecond. Before calibration, the value is
    --  a placeholder, so monotonic always works, it is an estimation.
    MS_Per_Sec    : constant := 1_000;
    Nanos_Per_MS  : constant := 1_000_000;
    Mono_TSC_Freq : Unsigned_64 := Nanos_Per_MS * 2;
+
+   pragma Unreferenced (MS_Per_Sec);
+   pragma Unreferenced (Mono_TSC_Freq);
 
    procedure Initialize_Sources is
    begin
