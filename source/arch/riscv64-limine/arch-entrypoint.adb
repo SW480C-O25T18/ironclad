@@ -148,18 +148,12 @@ package body Arch.Entrypoint is
          when others => Handle_Exception ("Limine protocol translation");
       end;
 
-      -- FDT Initialization
-      begin
-         Arch.Debug.Print ("[Stage 3] Initializing FDT...");
-         if not Arch.FDT.Initialize then
-            Lib.Panic.Hard_Panic ("No DTB was found!");
-         end if;
-         Arch.Debug.Print ("[Stage 3] DTB initialized successfully");
-         Arch.Debug.Print ("[Stage 3] Printing DTB contents:");
-         Print_DTB_Node (Arch.DTB.Root_Node);
-      exception
-         when others => Handle_Exception ("DTB initialization");
-      end;
+      --  declare
+      --     Received_Line : String (1 .. 100);
+      --  begin
+      --     Devices.UART.Read_UART0_Line(Received_Line);
+      --     Lib.Messages.Put_Line(Received_Line);
+      --  end;
 
       -- Allocators & MMU Initialization
       begin
@@ -174,134 +168,59 @@ package body Arch.Entrypoint is
          when others => Handle_Exception ("Allocator or MMU initialization");
       end;
 
-      -- Logging Initialization
-      begin
-         Arch.Debug.Print ("[Stage 5] Enabling logging...");
-         Lib.Messages.Enable_Logging;
-         Arch.Debug.Print ("[Stage 5] Logging enabled");
-      exception
-         when others => Handle_Exception ("Logging initialization");
-      end;
+      --  Initialize device discovery facilities.
+      Debug.Print ("Initializing DTB discovery");
+      -- if not Arch.DTB.Init then
+      --   Lib.Panic.Hard_Panic ("No DTB was found!");
+      -- end if;
 
-      -- Memory Map Dump
-      begin
-         Arch.Debug.Print ("[Stage 6] Dumping physical memory map:");
-         if Info.Memmap'Length > 0 then
-            Addr := Info.Memmap (1).Start + Info.Memmap (1).Length;
-         else
-            Arch.Debug.Print ("[Warning] Memmap is empty");
-         end if;
-         for E of Info.Memmap (1 .. Info.Memmap_Len) loop
-            Addr := E.Start + E.Length;
-            Arch.Debug.Print (
-               "[" & E.Start'Image & " - " & Addr'Image & "] " &
-               Boot_Memory_Type'Image (E.MemType)
-            );
-         end loop;
-         Arch.Debug.Print ("[Stage 6] Memory map dump complete");
-      exception
-         when others => Handle_Exception ("Memory map dump");
-      end;
 
-      -- CPU Initialization
-      begin
-         Arch.Debug.Print ("[Stage 7] Initializing CPU cores...");
-         Arch.CPU.Init_Cores;
-         Num_Harts := Unsigned_64 (Arch.CPU.Core_Count);
-         Arch.Debug.Print (
-            "[Stage 7] CPU cores initialized: " &
-            Unsigned_To_String (Num_Harts)
-         );
-      exception
-         when others => Handle_Exception ("CPU core initialization");
-      end;
 
-      -- CLINT Configuration
-      begin
-         Arch.Debug.Print ("[Stage 8] Configuring CLINT...");
-         CLINT_Node := Find_Node_By_Compatible ("riscv,clint");
-         if CLINT_Node /= null then
-            Arch.CLINT.Set_CLINT_Configuration;
-            Arch.Debug.Print ("[Stage 8] CLINT configured successfully");
-         else
-            Arch.Debug.Print ("[Stage 8] CLINT not found; using defaults");
-         end if;
-      exception
-         when others => Handle_Exception ("CLINT configuration");
-      end;
+      --  Initialize the allocators and MMU.
+      Debug.Print ("Initializing allocators and MMU");
+      Lib.Messages.Put_Line ("Initializing allocators");
+      Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
+      Debug.Print ("Physical allocator initialized");
+      Debug.Print ("Initializing MMU");
+      if not Arch.MMU.Init (Info.Memmap (1 .. Info.Memmap_Len)) then
+         Lib.Panic.Hard_Panic ("The VMM could not be initialized");
+      end if;
+      Debug.Print ("MMU initialized");
 
-      -- PLIC Configuration
-      begin
-         Arch.Debug.Print ("[Stage 9] Configuring PLIC...");
-         PLIC_Node := Find_Node_By_Compatible ("riscv,plic");
-         if PLIC_Node /= null then
-            Arch.PLIC.Set_PLIC_Configuration;
-            Arch.Debug.Print ("[Stage 9] PLIC configured successfully");
-         else
-            Arch.Debug.Print ("[Stage 9] PLIC not found; using defaults");
-         end if;
-      exception
-         when others => Handle_Exception ("PLIC configuration");
-      end;
+            Lib.Messages.Put_Line ("allocator initialized");
 
-      -- Trap Handling Configuration
-      begin
-         Arch.Debug.Print ("[Stage 10] Setting up trap handling...");
-         Arch.CPU.Set_Trap_Vector;
-         Arch.Debug.Print ("[Stage 10] Trap handling initialized");
-      exception
-         when others => Handle_Exception ("Trap handling initialization");
-      end;
+      --  Enable dmesg buffers and KASAN if wanted.
+      Debug.Print ("Enabling logging");
+      Lib.Messages.Enable_Logging;
+      Debug.Print ("Logging enabled");
+      #if KASAN
+         Debug.Print ("Initializing KASAN");
+         Lib.KASAN.Init;
+         Debug.Print ("KASAN initialized");
+      #end if;
 
-      -- Interrupts Initialization
-      begin
-         Arch.Debug.Print ("[Stage 11] Initializing interrupts...");
-         Arch.Interrupts.Initialize;
-         Arch.Debug.Print ("[Stage 11] Interrupts initialized");
-      exception
-         when others => Handle_Exception ("Interrupt initialization");
-      end;
+      --  Print the memory map, it is useful at times.
+      Lib.Messages.Put_Line ("Physical memory map:");
+      for E of Info.Memmap (1 .. Info.Memmap_Len) loop
+         Addr := E.Start + E.Length;
+         Lib.Messages.Put_Line
+            ("[" & E.Start'Image & " - " & Addr'Image & "] " &
+             Boot_Memory_Type'Image (E.MemType));
+      end loop;
 
-      -- ACPI Initialization
-      begin
-         Arch.Debug.Print ("[Stage 12] Initializing ACPI...");
-         declare
-            Success : Boolean;
-         begin
-            Arch.ACPI.Initialize (Success);
-            if Success then
-               Arch.Debug.Print ("[Stage 12] ACPI initialized successfully");
-            else
-               Arch.Debug.Print ("[Stage 12] ACPI not supported.");
-            end if;
-         end;
-      exception
-         when others => Handle_Exception ("ACPI initialization");
-      end;
+      --  Initialize the other cores of the system.
+      Debug.Print ("Initializing cores");
+      Arch.CPU.Init_Cores;
+      Debug.Print ("Cores initialized");
 
-      -- Clock Sources Initialization
-      begin
-         Arch.Debug.Print ("[Stage 13] Initializing clock sources...");
-         Arch.Clocks.Initialize_Sources;
-         Arch.Debug.Print ("[Stage 13] Clock sources initialized");
-      exception
-         when others => Handle_Exception ("Clock sources initialization");
-      end;
-
-      -- Command Line & Main Kernel
-      begin
-         Arch.Debug.Print ("[Stage 14] Copying command line...");
-         Arch.Cmdline_Len := Info.Cmdline_Len;
-         Arch.Cmdline
-           (1 .. Info.Cmdline_Len) :=
-           Info.Cmdline
-             (1 .. Info.Cmdline_Len);
-         Arch.Debug.Print ("[Stage 14] Command line copied");
-         Arch.Debug.Print ("[Stage 14] Jumping to main kernel...");
-         Main;
-      exception
-         when others => Handle_Exception ("Command line setup or main execution");
-      end;
+      --  Go to main kernel.
+      Debug.Print ("Copying command line");
+      Arch.Cmdline_Len := Info.Cmdline_Len;
+      Arch.Cmdline (1 .. Info.Cmdline_Len) :=
+         Info.Cmdline (1 .. Info.Cmdline_Len);
+      Debug.Print ("Command line copied");
+      Debug.Print ("Jumping to main kernel");
+      Main;
    end Bootstrap_Main;
 
 end Arch.Entrypoint;

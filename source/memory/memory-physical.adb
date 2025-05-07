@@ -71,7 +71,6 @@ package body Memory.Physical is
       Available_Memory := Free_Memory;
       Total_Memory     := Size (To_Integer (Memmap (Memmap'Last).Start +
                                 Memmap (Memmap'Last).Length));
-
       --  Calculate what we will need for the bitmap, and find a hole for it.
       Block_Count   := Unsigned_64 (Total_Memory) / Block_Size;
       Bitmap_Length := Size (Block_Count) / 8;

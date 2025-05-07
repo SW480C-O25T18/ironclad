@@ -1,5 +1,18 @@
 #  arch-offsets.inc: RISC-V64 Trap Frame Offsets
 #  Copyright (C) 2025 Sean C. Weeks
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 .set FRAME_RA,        0     # x1_ra
 .set FRAME_TP,        8     # x4_tp
@@ -50,4 +63,3 @@
 #  The TCB_CONTEXT_OFFSET in Ada is 208 bytes, so:
 # Offset of the context-pointer field in the TCB
 .set TCB_FPCTX,      368     
-

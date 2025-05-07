@@ -38,10 +38,6 @@ package Devices.UART with SPARK_Mode => Off is
    --  Print a string to UART0.
    procedure Write_UART0 (Message : String);
 
-   ---------------------------------------------------------------------------
-   --  UART Input
-   ---------------------------------------------------------------------------
-   --  Read a line of input from UART0.
    procedure Read_UART0_Line (Line : out String);
 
 private
