@@ -44,11 +44,6 @@ package body Arch.Entrypoint is
       --  Translate the limine protocol into arch-agnostic structures.
       Limine.Translate_Proto;
 
-      --  Initialize device discovery facilities.
-      if not Arch.DTB.Init then
-         Lib.Panic.Hard_Panic ("No DTB was found!");
-      end if;
-
       --  Initialize the allocators and MMU.
       Lib.Messages.Put_Line ("Initializing allocators");
       Memory.Physical.Init_Allocator (Info.Memmap (1 .. Info.Memmap_Len));
